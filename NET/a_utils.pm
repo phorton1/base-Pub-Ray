@@ -120,17 +120,9 @@ BEGIN
 #--------------------------------
 
 our $appClientName = 'app';
-our $appGroup = 'raymarine';
-	# same data and temp directories for
-	# shark and raynet (to become 'raynet')
-
-# createSTDOUTSemaphore("sem$appGroup");
 $USE_SHARED_LOCK_SEM = 1;
 
 Pub::Utils::initUtils();
-
-setStandardTempDir($appGroup);
-setStandardDataDir($appGroup);
 
 
 
