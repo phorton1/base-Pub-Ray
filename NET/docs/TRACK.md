@@ -55,7 +55,7 @@ the E80 to close the TCP connection.
 | 0x0e | USELESS_E     | -                  | Returns EVENT byte=6; no practical use found   |
 | 0x0f | NOREPLY_F     | -                  | Never produced a reply                         |
 | 0x10 | BUMP_NAME     | seq, name16        | Increments the default track name counter      |
-| 0x11 | RECORD        | seq, zero4         | Opens a writer-session track upload (TRACK_writing.md); see SAVED (0x0f reply) |
+| 0x11 | RECORD        | seq, zero4         | Opens a writer-session track upload (see Writer Session below); reply is SAVED (0x0f) |
 
 Commands 0x12 and higher cause the E80 to close the TCP connection (FIN).
 
@@ -78,7 +78,7 @@ The E80 sends these reply codes back to the client:
 | 0x0b | CHANGED  | uuid, byte             | No seq; a saved track was added/changed/deleted |
 | 0x0d | NAMED    | seq, success           | Confirms SET_NAME                             |
 | 0x0e | RENAMED  | seq, success           | Confirms RENAME                               |
-| 0x0f | SAVED    | seq, success           | Auto-save ack for writer-session RECORD (TRACK_writing.md) |
+| 0x0f | SAVED    | seq, success           | Writer-session auto-save ack (see Writer Session below)    |
 
 ## EVENT Byte (reply 0x0a)
 
@@ -136,6 +136,61 @@ The `mta_uuid` is the identity UUID for tracks throughout navMate. The `trk_uuid
 (second CONTEXT, context_bits=0x11) is preserved as `companion_uuid` in the DB schema
 and KML ExtendedData. The two UUIDs are permanently coupled and always travel together.
 `companion_uuid` in the DB and KML maps directly to `trk_uuid` at the FSH/E80 boundary.
+
+## Writer Session (RECORD / SAVED)
+
+The writer session is a transient, one-track-per-session sub-protocol for uploading a
+complete track from the client into the E80. It runs over the same TCP service (port
+2053) and message envelope as the rest of TRACK, but a single TCP connection uploads
+exactly one track and is then closed. The full wire specification lives in
+[`notes/TRACK_writing.md`](notes/TRACK_writing.md); this section documents the commands
+it introduces and how they relate to the rest of the protocol.
+
+### Commands the writer adds
+
+| Dir  | Hex  | Name    | Params                | Notes                                              |
+| ---- | ---- | ------- | --------------------- | -------------------------------------------------- |
+| SEND | 0x11 | RECORD  | seq, zero4            | Opens the writer session; resending it aborts      |
+| INFO | 0x00 | CONTEXT | seq, uuid, context_bits | Opens a body group (sent client->E80)            |
+| INFO | 0x01 | BUFFER  | seq, buffer           | Body payload -- MTA record or point batch          |
+| INFO | 0x02 | END     | seq, uuid             | Closes a body group                                |
+| RECV | 0x0f | SAVED   | seq, success          | Auto-save acknowledgment; ends the session         |
+
+`RECORD` (0x11) is the only new SEND command and `SAVED` (0x0f) the only new RECV reply.
+The three INFO frames reuse the same command nibbles (0x00/0x01/0x02) as the reader-side
+`CONTEXT`/`BUFFER`/`END` reply headers, but here they are sent client->E80 to deliver the
+track body rather than received from the E80.
+
+### Session lifecycle
+
+```
+client -> RECORD                          open the session (no reply)
+client -> CONTEXT / BUFFER / END          MTA body group (no reply)
+client -> CONTEXT / BUFFER / END  (1..n)  point batch body group(s) (no reply)
+E80    -> SAVED { seq, success }          auto-save fires; end of session
+                                          (client then closes the TCP connection)
+```
+
+The E80 auto-saves and emits `SAVED` once the cumulative delivered point count reaches
+the MTA's `cnt1`; there is no per-frame acknowledgment. Closing the TCP connection before
+`SAVED` discards the in-progress track, and resending `RECORD` at any point aborts the
+upload. See [`notes/TRACK_writing.md`](notes/TRACK_writing.md) for the body-group wire
+form, MTA writer-side field values, the `cnt1` contract, and device limits.
+
+### SAVED status codes
+
+The `SAVED` `success` field reports the outcome of the auto-save:
+
+| Value        | Meaning                                                       |
+| ------------ | ------------------------------------------------------------- |
+| `0x00040000` | Success -- the track was saved                                |
+| `0x80040f07` | Rejected -- a track with this UUID already exists on the E80   |
+
+`RECORD` therefore requires a UUID that is not already present in the E80 saved-track
+database; uploading under an existing UUID fails with `0x80040f07` rather than
+overwriting. Any `success` value other than `0x00040000`, or a missing reply, is a failed
+save. (Storage-full and point-count failures are covered under "Device limits" in
+[`notes/TRACK_writing.md`](notes/TRACK_writing.md).)
 
 ## Important: GET_STATE Before GET_CUR2
 
