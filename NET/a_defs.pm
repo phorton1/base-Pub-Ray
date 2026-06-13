@@ -108,7 +108,7 @@ our $E80_4_IP = '10.0.166.121';
 #----------------------------------------
 # our local IP is fixed by ethernet config
 
-our $LOCAL_IP = '10.0.241.200';
+our $LOCAL_IP = '10.0.0.200';
 
 # raydp is at a known mcast address with service_id 0
 
