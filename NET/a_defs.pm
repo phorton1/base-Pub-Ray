@@ -9,6 +9,7 @@ use threads;
 use threads::shared;
 use Socket qw(pack_sockaddr_in inet_aton);
 use Pub::Utils;
+use Pub::Prefs;
 
 
 
@@ -442,6 +443,13 @@ our %SERVICE_PORT_DEFS  = (
 sub initServices
 {
 	my (%want) = @_;
+	# Resolve the E-Series adapter IP from prefs (default = the $LOCAL_IP constant
+	# above).  BOTH apps call initServices AFTER their prefs are loaded and BEFORE
+	# the NET services bind, so this shared hook makes a wizard-written (or hand-
+	# edited) navMate.prefs "LOCAL_IP" take effect for navMate -- and for shark too,
+	# with no code change there.  With no prefs loaded (shark today) getPref returns
+	# undef and the default is kept.
+	$LOCAL_IP = getPref('LOCAL_IP') // $LOCAL_IP;
 	my $auto_query = $want{auto_query} // 0;
 	mergeHash($SERVICE_PORT_DEFS{$SPORT_FILESYS},{
 		parser_class	=> 'Pub::Ray::NET::e_FILESYS',
