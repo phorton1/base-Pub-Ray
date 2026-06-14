@@ -129,7 +129,17 @@ on it for protocol probing and exploration, and **navMate** (also its own reposi
 tool that provides its own hands-on E80 access. Each E80 has its own fixed
 IP address - units do not use DHCP. The address is intrinsic to the hardware,
 varies across units, and is advertised in the RAYDP IDENT packet at startup.
-The specific addresses used in development are recorded in `NET/a_defs.pm`. A standard **shielded** ethernet cable is required between
+The specific addresses used in development are recorded in `NET/a_defs.pm`.
+
+The computer side binds its own sockets to a fixed local address, **`$LOCAL_IP`**
+(in `a_defs.pm`, default `10.0.0.200`) - the address the computer's ethernet adapter
+must hold to reach the E80. `initServices` resolves it from a `LOCAL_IP` preference if
+one is set, otherwise falling back to that default, so a consuming application can
+override the bind address without code changes: navMate's E-Series network wizard writes
+this preference after configuring the adapter, while shark, which loads no preferences,
+always uses the default.
+
+A standard **shielded** ethernet cable is required between
 the laptop and the E80 (or a router that bridges them); see
 **[Cables](ethernet_cables.md)** for wiring details and the 3D-printed
 field-installable waterproof connector.
