@@ -150,8 +150,24 @@ sub modifyWaypoint
 		next if $key eq 'lat' || $key eq 'lon';
 		$wp->{$key} = $hash->{$key};
 	}
-	$wp->{lat} = int($hash->{lat} * $SCALE_LATLON) if exists $hash->{lat};
-	$wp->{lon} = int($hash->{lon} * $SCALE_LATLON) if exists $hash->{lon};
+	# Lat/lon are a unit: with one but not the other we'd recompute north/east
+	# from a mix of new + stale, so reject exactly-one.  Neither present = a
+	# name/sym-only patch (north/east already agree with the unchanged lat/lon).
+	my $has_lat = exists $hash->{lat};
+	my $has_lon = exists $hash->{lon};
+	if ($has_lat != $has_lon)
+	{
+		error("modifyWaypoint: lat and lon must be supplied together (uuid $uuid)");
+		return 0;
+	}
+	if ($has_lat)
+	{
+		$wp->{lat}   = int($hash->{lat} * $SCALE_LATLON);
+		$wp->{lon}   = int($hash->{lon} * $SCALE_LATLON);
+		my $alt      = latLonToNorthEast($hash->{lat}, $hash->{lon});   # decimal in, like createWaypoint
+		$wp->{north} = $alt->{north};
+		$wp->{east}  = $alt->{east};
+	}
 	$this->showCommand("modifyWaypoint($wp->{name}) uuid($uuid)");
 	my $buffer = buildWaypoint(0,$wp,$MONITOR_API_BUILDS,$TEMP_COLOR);
 	my $data = unpack('H*',$buffer);
