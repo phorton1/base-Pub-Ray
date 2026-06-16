@@ -376,7 +376,7 @@ our %TRACK_REQUEST_NAME = (
 # This single table covers BOTH the long-lived reader-side flows
 # (GET_TRACK, GET_CUR2, GET_DICT, etc.) AND the transient
 # one-track-per-session writer flow (RECORD + body groups, replied
-# with SAVED).  See NET/docs/notes/TRACK_writing.md for the writer
+# with SAVED).  See navMate e80_stuff/abstracts/TRACK_writing.md for the writer
 # protocol spec.
 #
 # The INFO|CONTEXT/BUFFER/END entries are byte-identical for both

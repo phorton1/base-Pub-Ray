@@ -2,7 +2,7 @@
 # d_TRACK_writer.pm
 #---------------------------------------
 # Transient one-track-per-session writer for the E80 TRACK service.
-# See NET/docs/notes/TRACK_writing.md for the protocol spec and
+# See navMate e80_stuff/abstracts/TRACK_writing.md for the protocol spec and
 # NET/docs/notes/example_write_track_bocas.pl for the reference
 # wire-level behavior this class encapsulates.
 #
