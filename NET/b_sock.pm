@@ -675,7 +675,7 @@ sub sockThread
 					Proto     => 'udp',
 					ReuseAddr => 1,
 					Timeout	  => $this->{CONNECT_TIMEOUT} );
-				if ($sock && !$sock->mcast_add($this->{ip}))
+				if ($sock && !$sock->mcast_add($this->{ip}, $this->{local_ip}))
 				{
 					error("Couldn't join multicast group: $!");
 					$sock->close();
