@@ -112,10 +112,11 @@ sub showValues
 		my $field_value = $field_values->{$fid};
 
 		my $ttl = $field_value->{ttl};
-		my $type_hex = sprintf("%02x",$field_value->{type});
-		my $subtype_hex = sprintf("%02x",$field_value->{subtype});
-		my $rectype_hex = sprintf("%02x",$field_value->{record_type});
-		my $instance = $field_value->{instance};
+		my $enc_hex = sprintf("%04x",$field_value->{enc});
+		my $family = $field_value->{family_name};
+		my $pgn  = $field_value->{pgn};
+		my $sa   = $field_value->{sa};
+		my $flag = $field_value->{flag};
 		my $name = $field_value->{name};
 		my $value = $field_value->{value};
 
@@ -125,13 +126,12 @@ sub showValues
 		$text .=
 			sprintf("fid(%02x) ",$fid).
 			pad("ttl($ttl)",8).
-			pad("type($type_hex)",9).
-			pad("subtype($subtype_hex)",12).
-			pad("rec($rectype_hex)",10).
-			pad("inst($instance)",8).
+			pad("enc($enc_hex)",11).
+			pad("fam=$family",17).
 			pad($name,14).
 			"= ".
-			$value.
+			pad($value,24).
+			(defined($pgn) ? " PGN($pgn) SA($sa) flag($flag)" : '').
 			"\n";
 	}
 
@@ -162,6 +162,18 @@ use base qw(Pub::Ray::NET::a_parser);
 my $dbg_dp = 0;
 
 our $ONLY_CHANGED_FIELD_VALUES = 0;
+
+
+# The source family (the 'A' byte) a broadcast value-record carries.
+our %DB_FAMILY = (
+	4  => 'N2K(4)',
+	5  => 'NMEA0183(5)',
+	7  => 'APP(7)',
+	9  => 'SEATALK(9)',
+	10 => 'COMPUTED(10)',
+	12 => 'GPS_COMP(12)',
+	15 => 'HEADING(15)',
+);
 
 
 
@@ -542,18 +554,33 @@ sub decode_field
 	my ($this,$field_num,$payload,$poffset,$is_sniffer) = @_;
 	my $save_offset = $$poffset;
 
-	# Extract the serial field_value data
-	# type, len, subtype, and ttl
-	# some packets have some extra bytes, perhaps identifying a record the fields belong to?
+	# A DBNAV broadcast value-record -- the compact broadcast serialization
+	# of the same value-record the TCP transactions carry:
+	#    fid(4) enc(2) size(2) data(size)
+	#    family(1) ttl(1) descriptor_len(2) descriptor(descriptor_len)
+	# family is the source family (the 'A' byte); descriptor is the N2K
+	# [PGN|SA|flag], present only for family 4 (N2K).
 
-	my ($fid,$type,$len) = unpack('Vvv',substr($payload,$$poffset,8));
+	my ($fid,$enc,$size) = unpack('Vvv',substr($payload,$$poffset,8));
 	$$poffset += 8;
-	my $data = substr($payload,$$poffset,$len);
-	$$poffset += $len;
-	my ($subtype,$ttl,$extra_len) = unpack('CCv',substr($payload,$$poffset,4));
+	my $data = substr($payload,$$poffset,$size);
+	$$poffset += $size;
+	my ($family,$ttl,$descriptor_len) = unpack('CCv',substr($payload,$$poffset,4));
 	$$poffset += 4;
-	my $extra_hex = $extra_len ? unpack('H*',substr($payload,$$poffset,$extra_len)) : '';
-	$$poffset += $extra_len;
+	my $descriptor = '';
+	my ($pgn,$sa,$flag);
+	if ($descriptor_len)
+	{
+		my $desc = substr($payload,$$poffset,$descriptor_len);
+		$descriptor = unpack('H*',$desc);
+		if ($descriptor_len >= 6)		# N2K source descriptor: PGN(4) SA(1) flag(1)
+		{
+			$pgn  = unpack('V',substr($desc,0,4));
+			$sa   = unpack('C',substr($desc,4,1));
+			$flag = unpack('C',substr($desc,5,1));
+		}
+	}
+	$$poffset += $descriptor_len;
 
 	# Update and possibly short return on found values
 
@@ -585,9 +612,14 @@ sub decode_field
 			name		=> $name,
 			time		=> time(),
 			ttl			=> $ttl,
-			type 		=> $type,
-			subtype 	=> $subtype,
-			extra		=> $extra_hex,
+			enc			=> $enc,
+			size		=> $size,
+			family		=> $family,
+			family_name	=> $DB_FAMILY{$family} // sprintf("FAM(%d)",$family),
+			descriptor	=> $descriptor,
+			pgn			=> $pgn,
+			sa			=> $sa,
+			flag		=> $flag,
 			data 		=> $data, });
 		$field_values->{$fid} = $found;
 
@@ -673,14 +705,15 @@ sub decode_field
 			pad($field_num,2).':'.
 			pad($save_offset,3).' '.
 			sprintf("fid(%02x)",$fid)." ".
-			sprintf("type(%04x:%02x) ",$type,$subtype).
+			pad(sprintf("enc(%04x)",$enc),11).
+			pad("fam=$found->{family_name}",17).
 			pad("ttl($ttl)",8).
-			pad("len($len)",9).
+			pad("size($size)",9).
 			pad($name,14).
 			"= ".
 			pad($value,24).
 			($fxn ? "'$data_hex'" : '').
-			($extra_hex ? "  extra=$extra_hex" : '').
+			(defined($pgn) ? "  PGN($pgn) SA($sa) flag($flag)" : '').
 			"\n";
 	}
 

@@ -188,7 +188,7 @@ for my $port (keys %SERVICE_PORT_DEFS)
 # My current hardwired monitoring preferences, per implemented service
 
 my $SHARK_MON_FILESYS	= 0;	# $MON_HEADER | $MON_RAW | $MON_PARSE | $MON_PIECES;
-my $SHARK_MON_DBNAV		= 0;	# $MON_ALL;
+my $SHARK_MON_DBNAV		= $MON_ALL;
 my $SHARK_MON_TRACK 	= $MON_HEADER | $MON_RAW | $MON_MULTI | $MON_PARSE | $MON_PIECES |
 	$MON_PACK		|
     $MON_PACK_CONTROL |

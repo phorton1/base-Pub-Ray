@@ -1,21 +1,26 @@
 #===========================================================================
-# d_DB implemented service
+# d_DB - the E80 DATABASE service (TCP port 2050)
 #===========================================================================
-# Breakthrough rapid implementation
-# Asking for eventing (populate in onConnect) of all possible fids
-# - is time consuming and probasbly not necessary as only certain ones
-#   even consistently have unknown values
-# - should be short circuited if DBNAV gets field_values by $fid before us
-# Which brings up that DBNAV is just an arm of DB, and that we can also
-# 	parse values here, as well as respond to the occasional event.
-#	The only real difference being that DBNAV is udp and we want
-#   to control its monitoring separately (service_ports architecture).
-# Which brings up that
-# - parsers should live in the b_layer and do all the command / rule definition
-# - parsers should not maintain state, implemented services should
-# - we should add systematic control of debugging (monitoring) of
-#   command and control processes
-# - as well as implementing command and control processes uniformly
+# The point-to-point control side of the E80 Database service (the broadcast
+# side is d_DBNAV.pm; both are service_id 16 / 0x10).  This module implements
+# the full firmware protocol decoded in docs/e80_firmware (DATABASE.md /
+# DB_DECODE.md / DB_FIDS.md) and wire-confirmed against
+# NET/docs/logs/rns_db_field_enum.txt:
+#
+#   - subscribe (SUB_VALUE / SUB_DIR) -- adds a fid to the DBNAV broadcast;
+#   - read    (getItem  -> CMD_GET_VALUE) -- the preferred source's value
+#             and its source uuid;
+#   - write   (putItem  -> CMD_PUT_ITEM)  -- mint or update a value (see the
+#             read-before-write contract documented on the API methods).
+#
+# The packet parser and the transaction-form value-record codec live in
+# e_DB.pm, the way e_TRACK pairs with d_TRACK.  This file holds the service
+# class, the command constants, %DB_PARSE_RULES and %DB_FIELDS.
+#
+# ASYNC MODEL (B-): getItem / putItem are SYNCHRONOUS and BLOCK up to the
+# b_sock command_timeout.  A client must call them from a thread it spawns,
+# never the wx main thread, and must keep only one such call in flight per
+# d_DB socket at a time.
 
 package Pub::Ray::NET::d_DB;
 use strict;
@@ -27,16 +32,21 @@ use Pub::Utils;
 use Pub::Ray::NET::a_utils;
 use Pub::Ray::NET::a_defs;
 use base qw(Pub::Ray::NET::b_sock);
+require Pub::Ray::NET::e_DB;
 
 
-my $dbg = 0;
+my $dbg     = 0;
+my $dbg_api = 0;
+my $dbg_sub = 1;		# per-fid subscription tracing; lower to show it
 
 
-my $INIT_NONE = 0;
-my $INIT_KNOWN = 1;
-my $INIT_ALL = 2;
+# onIdle registers fids with the E80 so the DBNAV multicast 'goes rich';
+# $HOW_INIT picks the set.
+our $INIT_DB_NONE  = 0;		# register nothing (only the 5 always-on fids broadcast)
+our $INIT_DB_KNOWN = 1;		# register the named %DB_FIELDS fids
+our $INIT_DB_ALL   = 2;		# register every fid 0x02..0xff
 
-my $HOW_INIT = $INIT_ALL;
+our $HOW_INIT_DB = $INIT_DB_ALL;
 
 
 BEGIN
@@ -47,21 +57,45 @@ BEGIN
 		$self_db
 
 		$DB_SERVICE_ID
-
 		$SUCCESS2_SIG
 
-		$DB_CMD_UUID
+		$DB_CMD_SUB_DIR
 		$DB_CMD_DEF
-		$DB_CMD_FIELD
+		$DB_CMD_SUB_VALUE
 		$DB_CMD_EXISTS
-		$DB_CMD_NAME
-		$DB_CMD_QUERY
+		$DB_CMD_LIST
+		$DB_CMD_GET_VALUE
+		$DB_CMD_GET_ITEM
+		$DB_CMD_PUT_ITEM
+		$DB_CMD_DEL_ITEM
 
+		$DB_REPLY_PUSH_DIR
+		$DB_REPLY_PUSH_VALUE
+		$DB_REPLY_ITEM_LIST
+		$DB_REPLY_VALUE
+		$DB_REPLY_ITEM
+
+		$DB_INFO_START
+		$DB_INFO_RECORD
+		$DB_INFO_END
+		$DB_PUSH_START
+		$DB_PUSH_RECORD
+		$DB_PUSH_END
+
+		$DB_EVENT_PING
+
+		%DB_MSG_NAME
 		%DB_PARSE_RULES
 		%DB_FIELDS
 
 		$DB_FIELD_WIND_ANGLE_APP
 		$DB_FIELD_WIND_ANGLE_TRUE
+
+		$HOW_INIT_DB
+		$INIT_DB_NONE
+		$INIT_DB_KNOWN
+		$INIT_DB_ALL
+
 	);
 }
 
@@ -69,70 +103,120 @@ our $self_db:shared;
 
 
 #------------------------------------------
-# main definitions
+# protocol constants
 #------------------------------------------
 
 our $DB_SERVICE_ID = 16;
 	# 16 == 0x10 == '1000' in streams
 
 our $SUCCESS2_SIG = '04000000';
-										# Reply			Request (command)
-our $DB_CMD_UUID   		= 0x00;		#
-our $DB_CMD_DEF			= 0x01;		#
-our $DB_CMD_FIELD		= 0x02;		#
-our $DB_CMD_EXISTS  	= 0x03;		#
-our $DB_CMD_NAME		= 0x04;		#
-our $DB_CMD_QUERY		= 0x05;		#
+	# the DB StartTransaction status word (0x00000004), distinct from the
+	# FILESYS/WPMGR success signature '00000400'
+
+# Command codes are the LOW byte of the 16-bit cmd_word; the high byte is the
+# $DIRECTION_* nibble (a_defs).  The full firmware cmd_word is shown in each
+# comment.  Wire-confirmed against NET/docs/logs/rns_db_field_enum.txt.
+
+# requests (client -> server, used with $DIRECTION_SEND)
+our $DB_CMD_SUB_DIR    = 0x00;	# 0x100 RegisterForUpdates           subscribe all of a fid's sources
+our $DB_CMD_DEF        = 0x01;	# 0x101 (field-definition probe)     no reply to a bare request
+our $DB_CMD_SUB_VALUE  = 0x02;	# 0x102 RegisterForPreferredUpdates  subscribe a fid's preferred value
+our $DB_CMD_EXISTS     = 0x03;	# 0x103 (existence probe)            no reply to a bare request
+our $DB_CMD_LIST       = 0x04;	# 0x104 GetItemList                  enumerate a fid's sources
+our $DB_CMD_GET_VALUE  = 0x05;	# 0x105 GetPreferredItem             read the preferred source's value
+our $DB_CMD_GET_ITEM   = 0x06;	# 0x106 GetItemWithTransport         keyed read of one specific source
+our $DB_CMD_PUT_ITEM   = 0x07;	# 0x107 SetItemUnconfirmed           the value write (no reply)
+our $DB_CMD_DEL_ITEM   = 0x08;	# 0x108 DeleteItem                   delete one source (UNTESTED on hw)
+
+# responses + unsolicited pushes (server -> client, used with $DIRECTION_RECV)
+our $DB_REPLY_PUSH_DIR   = 0x00;	# 0x000 directory-change announce (zero seq)
+our $DB_REPLY_PUSH_VALUE = 0x01;	# 0x001 value-change announce     (zero seq)
+our $DB_REPLY_ITEM_LIST  = 0x02;	# 0x002 ItemList                      reply to CMD_LIST
+our $DB_REPLY_VALUE      = 0x03;	# 0x003 GetPreferredItemResponse      reply to CMD_GET_VALUE
+our $DB_REPLY_ITEM       = 0x04;	# 0x004 GetItemWithTransportResponse  reply to CMD_GET_ITEM
+
+# transaction phases (bidirectional, used with $DIRECTION_INFO)
+our $DB_INFO_START   = 0x00;	# 0x200 StartTransaction
+our $DB_INFO_RECORD  = 0x01;	# 0x201 SendData        (carries the value-record)
+our $DB_INFO_END     = 0x02;	# 0x202 EndTransaction
+our $DB_PUSH_START   = 0x03;	# 0x203 UpdateStartTransaction (unsolicited)
+our $DB_PUSH_RECORD  = 0x04;	# 0x204 UpdateSendData
+our $DB_PUSH_END     = 0x05;	# 0x205 UpdateEndTransaction
+
+# event (used with $DIRECTION_EVENT)
+our $DB_EVENT_PING   = 0x00;	# 0x500 Ping (accepted no-op keepalive; NOT a close)
 
 
-our %DB_CMD_NAME = (
-	$DB_CMD_UUID   	 => 'UUID',
-	$DB_CMD_DEF		 => 'DEF',
-	$DB_CMD_FIELD	 => 'FIELD',
-	$DB_CMD_EXISTS   => 'EXISTS',
-	$DB_CMD_NAME	 => 'NAME',
-	$DB_CMD_QUERY	 => 'QUERY',
+our %DB_MSG_NAME = (
+	($DIRECTION_SEND | $DB_CMD_SUB_DIR)    => 'SUB_DIR',
+	($DIRECTION_SEND | $DB_CMD_DEF)        => 'DEF',
+	($DIRECTION_SEND | $DB_CMD_SUB_VALUE)  => 'SUB_VALUE',
+	($DIRECTION_SEND | $DB_CMD_EXISTS)     => 'EXISTS',
+	($DIRECTION_SEND | $DB_CMD_LIST)       => 'LIST',
+	($DIRECTION_SEND | $DB_CMD_GET_VALUE)  => 'GET_VALUE',
+	($DIRECTION_SEND | $DB_CMD_GET_ITEM)   => 'GET_ITEM',
+	($DIRECTION_SEND | $DB_CMD_PUT_ITEM)   => 'PUT_ITEM',
+	($DIRECTION_SEND | $DB_CMD_DEL_ITEM)   => 'DEL_ITEM',
+
+	($DIRECTION_RECV | $DB_REPLY_PUSH_DIR)   => 'PUSH_DIR',
+	($DIRECTION_RECV | $DB_REPLY_PUSH_VALUE) => 'PUSH_VALUE',
+	($DIRECTION_RECV | $DB_REPLY_ITEM_LIST)  => 'REPLY_ITEM_LIST',
+	($DIRECTION_RECV | $DB_REPLY_VALUE)      => 'REPLY_VALUE',
+	($DIRECTION_RECV | $DB_REPLY_ITEM)       => 'REPLY_ITEM',
+
+	($DIRECTION_INFO | $DB_INFO_START)   => 'INFO_START',
+	($DIRECTION_INFO | $DB_INFO_RECORD)  => 'INFO_RECORD',
+	($DIRECTION_INFO | $DB_INFO_END)     => 'INFO_END',
+	($DIRECTION_INFO | $DB_PUSH_START)   => 'PUSH_START',
+	($DIRECTION_INFO | $DB_PUSH_RECORD)  => 'PUSH_RECORD',
+	($DIRECTION_INFO | $DB_PUSH_END)     => 'PUSH_END',
+
+	($DIRECTION_EVENT | $DB_EVENT_PING)  => 'EVENT_PING',
 );
 
+
+# Parse rules, keyed by the full 16-bit cmd_word ($DIRECTION_* | code).
+# pieces are consumed in order by e_DB::parsePiece (and the a_parser base);
+# 'terminal' marks the frame that completes a reply (a value read also
+# completes early on a not-found REPLY_VALUE -- handled in e_DB).
 
 our %DB_PARSE_RULES = (
 
-	# keep alive event
+	# requests (SEND) -- parsed for outgoing monitoring only
+	($DIRECTION_SEND | $DB_CMD_SUB_DIR)    => { pieces => ['fid'],        terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_SUB_VALUE)  => { pieces => ['fid'],        terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_DEF)        => { pieces => ['seq','fid'],  terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_EXISTS)     => { pieces => ['seq','fid'],  terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_LIST)       => { pieces => ['seq','fid'],  terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_GET_VALUE)  => { pieces => ['seq','fid'],  terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_GET_ITEM)   => { pieces => ['seq','key'],  terminal => 0 },
+	($DIRECTION_SEND | $DB_CMD_PUT_ITEM)   => { pieces => ['seq','word'], terminal => 0 },  # word = 2-byte persist flag
+	($DIRECTION_SEND | $DB_CMD_DEL_ITEM)   => { pieces => ['seq','key'],  terminal => 0 },
 
-	$DIRECTION_EVENT | $DB_CMD_UUID		=> [],
+	# responses (RECV)
+	($DIRECTION_RECV | $DB_REPLY_VALUE)      => { pieces => ['seq','fid','db_bits','word'], terminal => 0 },
+	($DIRECTION_RECV | $DB_REPLY_ITEM_LIST)  => { pieces => ['seq','fid','count','ids'],    terminal => 0 },
+	($DIRECTION_RECV | $DB_REPLY_ITEM)       => { pieces => ['seq'],                        terminal => 0 },
+	($DIRECTION_RECV | $DB_REPLY_PUSH_VALUE) => { pieces => ['zero','fid','db_bits','word'],terminal => 1, is_event => 1 },
+	($DIRECTION_RECV | $DB_REPLY_PUSH_DIR)   => { pieces => ['zero'],                       terminal => 1, is_event => 1 },
 
-	# typical field_def request/reply
+	# transaction / INFO (bidirectional)
+	($DIRECTION_INFO | $DB_INFO_START)   => { pieces => ['seq','uuid','success2'],      terminal => 0 },
+	($DIRECTION_INFO | $DB_INFO_RECORD)  => { pieces => ['seq','biglen','record'],      terminal => 0 },
+	($DIRECTION_INFO | $DB_INFO_END)     => { pieces => ['seq','uuid'],                 terminal => 1 },
+	($DIRECTION_INFO | $DB_PUSH_START)   => { pieces => ['zero','uuid','success2'],     terminal => 0 },
+	($DIRECTION_INFO | $DB_PUSH_RECORD)  => { pieces => ['zero','biglen','fid','record'],terminal => 0 },
+	($DIRECTION_INFO | $DB_PUSH_END)     => { pieces => ['zero','uuid'],                terminal => 1, is_event => 1 },
 
-	$DIRECTION_SEND  | $DB_CMD_FIELD	=> [ 'fid' ],
-	$DIRECTION_SEND  | $DB_CMD_QUERY	=> [ 'seq','fid' ],
-
-	$DIRECTION_RECV  | $DB_CMD_EXISTS	=> [ 'seq','fid','db_bits','word' ],
-	$DIRECTION_INFO  | $DB_CMD_UUID		=> [ 'seq','uuid','success2' ],
-	$DIRECTION_INFO  | $DB_CMD_DEF		=> [ 'seq','def_buffer' ],
-	$DIRECTION_INFO  | $DB_CMD_FIELD	=> [ 'seq','uuid' ],
-
-	# later field_name? request/reply
-
-	$DIRECTION_SEND  | $DB_CMD_UUID		=> [ 'fid' ],
-	$DIRECTION_SEND  | $DB_CMD_NAME		=> [ 'seq','fid' ],
-	$DIRECTION_RECV  | $DB_CMD_FIELD	=> [ 'seq','fid','name_buffer' ],
-
-	# events
-
-	$DIRECTION_RECV  | $DB_CMD_DEF		=> [ 'zero','fid','db_bits','word' ],
-	$DIRECTION_INFO  | $DB_CMD_EXISTS	=> [ 'zero','uuid','success2' ],
-	$DIRECTION_INFO  | $DB_CMD_NAME		=> [ 'zero','dword','fid','def_buffer' ],
-	$DIRECTION_INFO  | $DB_CMD_QUERY	=> [ 'zero','uuid' ],
+	# event
+	($DIRECTION_EVENT | $DB_EVENT_PING)  => { pieces => [], terminal => 1, is_event => 1 },
 
 );
 
 
-
-
 #--------------------------------------------------------------
-# FID mapping
+# FID mapping -- the %DB_FIELDS table d_DBNAV decodes against
 #--------------------------------------------------------------
-# FIDs used by DB_NAV
 
 our $DB_FIELD_WIND_ANGLE_APP	= 0x59;		# 360 relative to bow heading
 our $DB_FIELD_WIND_ANGLE_TRUE	= 0x5b;		# 360 relative to bow heading
@@ -217,8 +301,116 @@ our %DB_FIELDS = (
 
 
 
+#===================================================================
+# API -- two primitives: getItem and putItem
+#===================================================================
+# MODEL B-: both BLOCK on the socket round-trip, so a client must call them
+# from a thread IT spawns (never the wx main thread), and keep only one such
+# call in flight per d_DB socket at a time.
+#
+# READ-BEFORE-WRITE CONTRACT.  The E80 keys a value by (fid, source-uuid).
+# A fid can have several sources; getItem returns the PREFERRED source and
+# its uuid.  On an INITIAL write of a fid the E80 MINTS its own source uuid
+# and ignores whatever uuid we send -- so a brand-new item is created simply
+# by calling putItem (omit the uuid).  To UPDATE an item that already exists
+# you must address the SAME source the E80 minted, so you have to getItem
+# first, take its $rec->{uuid}, and pass that uuid to putItem -- otherwise
+# the write does not land on the existing source.  Writes are unacknowledged
+# (silence == accepted); confirm by reading the value back.
+#
+# So a client that wants to set fid F to value V does:
+#
+#     my $rec  = $db->getItem($F);                       # learn current state
+#     my $uuid = (ref $rec) ? $rec->{uuid} : undef;      # undef => not present => mint
+#     $db->putItem($F, $ENC, $V, $persist, $uuid);       # uuid omitted on a mint
+#     # then optionally: $db->getItem($F) again to confirm $rec->{value} == $V
+#
+# (e.g. the mod003 timed-track toggle is fid 0x05ff0001, enc 0x0054 BOOL8;
+#  nonzero == stock tracks, absent/0 == timed.  That policy lives in the
+#  client, not here.)
+
+
+sub getItem
+	# Read a fid's preferred-source value (CMD_GET_VALUE).
+	# RETURNS:
+	#   - the decoded value-record hash on success: { fid, enc, size, value,
+	#     value_hex, A, B, descriptor, uuid } -- where 'uuid' is the E80
+	#     source uuid you feed back to putItem to UPDATE this item;
+	#   - undef       if the fid is not found / not currently feeding;
+	#   - '' / false  on a send or wait-reply error.
+	# BLOCKS up to command_timeout -- call from a spawned worker thread.
+{
+	my ($this, $fid) = @_;
+	display($dbg_api,0,sprintf("d_DB getItem(0x%x)",$fid));
+	return error("getItem: d_DB not connected") if !$this->{connected};
+
+	my $seq = $this->{next_seqnum}++;
+	my $msg = createDBMsg($seq, $DIRECTION_SEND | $DB_CMD_GET_VALUE, pack('V',$fid));
+	return '' if !$this->sendRequest($seq, sprintf("getItem(0x%x)",$fid), $msg);
+
+	my $reply = $this->waitReply(0);
+	return $reply if !$reply || !ref($reply);		# '' timeout / undef death pass-through
+
+	if (!$reply->{found})
+	{
+		display($dbg_api,1,sprintf("getItem(0x%x) not found (db_bits=0x%04x)",$fid,$reply->{db_bits}||0));
+		return undef;
+	}
+
+	my $record = $reply->{record};
+	$record->{uuid} = $reply->{uuid} if $record && $reply->{uuid};
+	return $record;
+}
+
+
+sub putItem
+	# Write a fid's value (CMD_PUT_ITEM): a four-frame transaction the
+	# protocol does NOT acknowledge.  Returns 1 once the frames are queued
+	# to the socket; there is no wire confirmation, so to verify the write
+	# took, the caller reads the value back with getItem.
+	#
+	# See the READ-BEFORE-WRITE CONTRACT above: call getItem FIRST.
+	#   - item already exists -> pass $uuid = the getItem record's {uuid}
+	#     so the write updates that same source;
+	#   - item does not exist -> omit $uuid (or pass any) -- the E80 mints
+	#     its own uuid on this first write; a getItem afterwards then yields
+	#     the real uuid for any future updates.
+	#
+	#   $fid      the field id
+	#   $enc      the encoding id (e.g. 0x0054 BOOL8); fixes the value width
+	#             (see e_DB::buildDBRecord / %ENC_SIZE)
+	#   $value    the integer value to write
+	#   $persist  1 = write through to flash (survives reboot), 0 = RAM only
+	#             (defaults to 1)
+	#   $uuid     16-hex-char source uuid; omit on a mint, pass getItem's on
+	#             an update (defaults to a throwaway the E80 replaces)
+	# BLOCKS only on the socket send -- call from a spawned worker thread.
+{
+	my ($this, $fid, $enc, $value, $persist, $uuid) = @_;
+	$persist = 1 if !defined $persist;
+	$uuid    = 'dddddddddddddddd' if !$uuid;		# initial-write throwaway; E80 mints its own
+	display($dbg_api,0,sprintf("d_DB putItem(0x%x, enc=0x%04x, value=%d, persist=%d, uuid=%s)",$fid,$enc,$value,$persist,$uuid));
+	return error("putItem: d_DB not connected") if !$this->{connected};
+	return error(sprintf("putItem(0x%x): uuid '%s' must be 16 hex chars",$fid,$uuid))
+		if length($uuid) != 16;
+
+	my $uuid_bytes = pack('H*', $uuid);
+	my $succ2      = pack('H*', $SUCCESS2_SIG);
+	my $record     = Pub::Ray::NET::e_DB::buildDBRecord({ fid => $fid, enc => $enc, value => $value });
+	my $biglen     = length($record);
+
+	my $seq = $this->{next_seqnum}++;
+	$this->sendPacket(createDBMsg($seq, $DIRECTION_SEND | $DB_CMD_PUT_ITEM, pack('v',$persist)));
+	$this->sendPacket(createDBMsg($seq, $DIRECTION_INFO | $DB_INFO_START,   $uuid_bytes . $succ2));
+	$this->sendPacket(createDBMsg($seq, $DIRECTION_INFO | $DB_INFO_RECORD,  pack('V',$biglen) . $record));
+	$this->sendPacket(createDBMsg($seq, $DIRECTION_INFO | $DB_INFO_END,     $uuid_bytes));
+	return 1;
+}
+
+
+
 #---------------------------------------------------
-# implementation
+# service lifecycle
 #---------------------------------------------------
 
 sub init
@@ -229,6 +421,7 @@ sub init
 	$this->{local_ip} = $LOCAL_IP;
 	$this->{inited} = 0;
 	$this->{exists} = shared_clone({});
+		# the shared set d_DBNAV marks each broadcast fid into
 	$self_db = $this;
 	return $this;
 }
@@ -240,8 +433,6 @@ sub destroy
 	display($dbg,0,"d_DB destroy($this->{name},$this->{ip}:$this->{port}) proto=$this->{proto}");
 	$this->SUPER::destroy();
 	$self_db = undef;
-
-    delete @$this{qw()};
 	return $this;
 }
 
@@ -250,7 +441,6 @@ sub uiInit
 {
 	my ($this) = @_;
 	display($dbg,0,"d_DB uiInit()");
-	$this->{exists} = shared_clone({});
 	$this->{inited} = 0;
 }
 
@@ -258,313 +448,82 @@ sub uiInit
 sub onConnect
 {
 	my ($this) = @_;
-	#	if (1 && $this->{auto_populate})
-	#	{
-	#		my $command = shared_clone({
-	#			name => 'populate' });
-	#		push @{$this->{command_queue}},$command;
-	#	}
+	$this->{inited} = 0;
 }
-
 
 
 sub onIdle
+	# Register fids with the E80 so the DBNAV multicast 'goes rich'.
+	# $HOW_INIT picks the set.  {exists} is the shared set of fids already
+	# registered or already arriving on the broadcast (d_DBNAV marks each
+	# fid it decodes), so each fid is registered once and the pass repeats
+	# across idle ticks until nothing new is left.
 {
 	my ($this) = @_;
-	display($dbg+2,0,"$this->{name} onIdle()");
+	return if $this->{inited};
 
-	if (!$this->{inited})
+	if ($HOW_INIT_DB == $INIT_DB_NONE)
 	{
-		if ($HOW_INIT == $INIT_NONE)
-		{
-			warning($dbg,0,"INIT_NONE");
-			$this->{inited} = 1;
-			return;
-		}
-
-		my @fids = $HOW_INIT == $INIT_KNOWN ?
-			(sort {$a <=> $b} keys %DB_FIELDS) :
-			(0x02 .. 0xff);
-
-		my $any = 0;
-		my $exists = $this->{exists};
-		
-		for my $fid (@fids)
-		{
-			next if $exists->{$fid};
-			$any++;
-
-			my $fid_name = $DB_FIELDS{$fid}->{name} || sprintf("UNKNOWN(%02x)",$fid);
-			display($dbg+1,0,"CMD_FIELD: $fid_name");		# was CMD_UUID
-			$this->sendDBCommand(
-				$DIRECTION_SEND,
-				$DB_CMD_FIELD,								# was $DB_CMD_UUID
-				$fid);
-
-			if (0)
-			{
-				my $seq = $this->{next_seqnum}++;
-				$this->{wait_seq} = $seq;
-				$this->{wait_name} = "CMD_NAME: $fid_name";
-				$this->sendDBCommand(
-					$DIRECTION_SEND,
-					$DB_CMD_NAME,
-					$fid,
-					$seq);
-				my $reply = $this->waitReply(0);
-			}
-
-			$exists->{$fid} = 1;
-		}
-
-		$this->{inited} = 1 if !$any;
+		$this->{inited} = 1;
+		return;
 	}
+
+	my @fids = $HOW_INIT_DB == $INIT_DB_KNOWN ?
+		(sort {$a <=> $b} keys %DB_FIELDS) :
+		(0x02 .. 0xff);
+
+	my $any = 0;
+	my $exists = $this->{exists};
+	for my $fid (@fids)
+	{
+		next if $exists->{$fid};
+		$any++;
+		my $name = $DB_FIELDS{$fid} ? $DB_FIELDS{$fid}->{name} : sprintf("UNKNOWN(%02x)",$fid);
+		display($dbg_sub,0,sprintf("subscribe fid(0x%02x) %s",$fid,$name));
+		$this->sendSubscribe($fid);
+		$exists->{$fid} = 1;
+	}
+
+	$this->{inited} = 1 if !$any;
 }
 
 
+#---------------------------------------------------
+# wire framing
+#---------------------------------------------------
 
-
-sub sendDBCommand
+sub createDBMsg
+	# build one DB wire message: [len:2][cmd_word:2][sid:2][body].
+	# A zero $seq is omitted (subscribe frames carry no seq).
 {
-	my ($this,$dir,$cmd,$fid,$seq) = @_;
-	my $cmd_name = Pub::Ray::NET::e_DB::dbCmdName($cmd);
-	display($dbg+1,0,sprintf("sendDBCommand("._def($seq).",0x%02x)=$cmd_name",$cmd));
-
-	return error("No 'this' in queueTRACKCommand") if !$this;
-	return error("Not started") if !$this->{started};
-	return error("Not running") if !$this->{running};
-
-	my $cmd_word = $dir | $cmd;
-	my $payload =
-		pack('v',$cmd_word).
-		pack('v',$DB_SERVICE_ID);
-	$payload .= pack('V',$seq) if $seq;
-	$payload .= pack('V',$fid);
-	my $len = length($payload);
-	$payload = pack('v',$len).$payload;
-	$this->sendPacket($payload);
-}
-
-	
-
-
-
-#===========================================================================
-# e_DB parser
-#===========================================================================
-
-package Pub::Ray::NET::e_DB;
-use strict;
-use warnings;
-use threads;
-use threads::shared;
-use Pub::Utils;
-use Pub::Ray::NET::a_defs;
-use Pub::Ray::NET::a_mon;
-use Pub::Ray::NET::a_utils;
-use base qw(Pub::Ray::NET::a_parser);
-
-my $dbg_ep = 0;
-
-BEGIN
-{
- 	use Exporter qw( import );
-    our @EXPORT = qw(
-	);
+	my ($seq, $cmd_word, $body) = @_;
+	$body = '' if !defined $body;
+	my $data =
+		pack('v', $cmd_word) .
+		pack('v', $DB_SERVICE_ID);
+	$data .= pack('V', $seq) if $seq;
+	$data .= $body;
+	return pack('v', length($data)) . $data;
 }
 
 
-
-sub dbCmdName
+sub sendSubscribe
+	# fire-and-forget CMD_SUB_VALUE (no seq, no reply) -- adds a fid to the
+	# DBNAV broadcast lists.
 {
-	my ($cmd) = @_;
-	return $DB_CMD_NAME{$cmd} || "UNKNOWN_CMD($cmd)";
+	my ($this, $fid) = @_;
+	#$this->sendPacket(createDBMsg(0, $DIRECTION_SEND | $DB_CMD_SUB_VALUE, pack('V',$fid)));
+	$this->sendPacket(createDBMsg(0, $DIRECTION_SEND | $DB_CMD_SUB_DIR, pack('V',$fid)));
 }
 
 
-sub fidName
+sub sendRequest
+	# send a seq'd request and arm waitReply for its reply.
 {
-	my ($fid) = @_;
-	my $field_def = $DB_FIELDS{$fid};
-	return $field_def ? $field_def->{name} : sprintf("UNKNOWN(%02x)",$fid);
-}
-
-
-sub newParser
-{
-	my ($class, $mon_defs) = @_;
-	display($dbg_ep,0,"Pub::Ray::NET::e_DB::new($mon_defs->{name})");
-	my $this = $class->SUPER::newParser($mon_defs);
-	bless $this,$class;
-	$this->{fids} = shared_clone({});
-	return $this;
-}
-
-
-
-
-sub showFids
-{
-	my ($this) = @_;
-	my $fids = $this->{fids};
-	c_print("FIDS\n");
-	my $pad1 = pad('',4);
-	my $pad2 = pad('',8);
-
-	for my $fid (sort {$a <=> $b} keys %$fids)
-	{
-		my $fid_rec = $fids->{$fid};
-		my $uuid = $fid_rec->{uuid};
-		my $def_buffer = $fid_rec->{def_buffer};
-		my $name_buffer = $fid_rec->{name_buffer};
-
-		c_print($pad1.sprintf("0x%08x\n",$fid));
-		c_print($pad2."uuid = $uuid\n") if $uuid;
-		c_print(parse_dwords($pad2."def_buffer  ",$def_buffer,1)) if $def_buffer;
-		c_print(parse_dwords($pad2."name_buffer ",$name_buffer,1)) if $name_buffer;
-	}
-}
-
-
-
-
-sub assignFields
-{
-	my ($fid_rec,$packet,@fields) = @_;
-	my $fid = $fid_rec->{fid};
-	for my $field (@fields)
-	{
-		my $new_value = $packet->{$field};
-		next if !defined($new_value);
-		my $old_value = $fid_rec->{$field};
-		if (!defined($old_value))
-		{
-			$fid_rec->{$field} = $new_value;
-			next;
-		}
-
-		warning(0,0,"fid($fid) field($field) VALUE CHANGED")
-			if $old_value ne $new_value;
-	}
-}
-
-
-
-sub parsePacket
-	# Sets up class specific state members, then
-	# calls base class to do all the work.
-{
-	my ($this,$packet) = @_;
-
-	display($dbg_ep+1,0,"Pub::Ray::NET::e_DB::parsePacket() is_reply($packet->{is_reply})");
-	my $rslt = $this->SUPER::parsePacket($packet);
-
-	my $fid = $packet->{fid};
-	if ($rslt && $fid)
-	{
-		$fid &= 0xff;
-		$this->{fids}->{$fid} ||= shared_clone({ fid => $fid });
-		my $fid_rec = $this->{fids}->{$fid};
-		assignFields($fid_rec,$packet,qw(uuid def_buffer name_buffer));
-	}
-
-	return $rslt;
-}
-
-
-
-sub parseMessage
-	# Calls base_clase BEFORE doing derived class specific stuff.
-	# and checking twice for rules,
-{
-	my ($this,$packet,$len,$part) = @_;
-	display($dbg_ep+2,0,"Pub::Ray::NET::e_DB::parseMessage($len)");
-	return undef if !$this->SUPER::parseMessage($packet,$len,$part);
-
-	my $cmd_word = unpack('v',substr($part,0,2));
-	my $cmd = $cmd_word & 0xff;
-	my $dir = $cmd_word & 0xff00;
-
-	my $cmd_name = dbCmdName($cmd);
-	my $dir_name = $DIRECTION_NAME{$dir};
-	display($dbg_ep+2,1,"Pub::Ray::NET::e_DB::parseMessage() dir($dir)=$dir_name cmd($cmd)=$cmd_name");;
-
-	my $mon = $packet->{mon};
-	printConsole(1,$mon,$packet->{color},"$dir_name $cmd_name")
-		if $mon & $MON_PARSE;
-
-	# get the rule
-
-	my $rule = $DB_PARSE_RULES{ $cmd_word };
-	if (!$rule)
-	{
-		error("NO RULE dir($dir)=$dir_name cmd($cmd)=$cmd_name") if !$rule;
-		return $packet;
-	}
-
-	# parse the pieces
-
-	my $offset = 4;				# skip cmd_word and sid
-	for my $piece (@$rule)
-	{
-		$this->parsePiece(
-			$packet,
-			$piece,
-			$part,
-			\$offset);			# for checking big_len
-	}
-
-	return $packet;
-}
-
-
-
-
-sub parsePiece
-{
-	my ($this,$packet,$piece,$part,$poffset) = @_;
-	my $mon = $packet->{mon};
-	my $color = $packet->{color};
-
-	if ($piece eq 'def_buffer' ||
-		$piece eq 'name_buffer')
-	{
-		printConsole(2,$mon,$color,$piece)
-			if $mon & $MON_PIECES;
-		$packet->{$piece} = substr($part,$$poffset);
-	}
-	elsif ($piece eq 'success2')
-	{
-		my $status = unpack('H*',substr($part,$$poffset,4));
-		my $ok = $status eq $SUCCESS2_SIG ? 1 : 0;
-		$packet->{success} = $ok;
-		$$poffset += 4;
-		printConsole(2,$mon,$color,"$piece = $ok")
-			if $mon & $MON_PIECES;
-	}
-	elsif ($piece =~ /^(db_bits|word)$/)				# one word (flag on wpmgr changed events)
-	{
-		my $word = unpack('H*',substr($part,$$poffset,2));
-		$packet->{$piece} = $word;
-		$$poffset += 2;
-		printConsole(2,$mon,$color,"$piece = $word")
-			if $mon & $MON_PIECES;
-	}
-	elsif ($piece eq 'fid')				# fid was referenced
-	{
-		my $fid_str = substr($part,$$poffset,4);
-		my $fid_hex = unpack('H*',$fid_str);
-		my $fid = unpack('V',$fid_str);
-
-		$packet->{$piece} = $fid;
-		$$poffset += 4;
-		printConsole(2,$mon,$color,"$piece = '$fid_hex' = ".sprintf('0x%x',$fid)." ".fidName($fid & 0xff))
-			if $mon & $MON_PIECES;
-	}
-	else
-	{
-		return $this->SUPER::parsePiece($packet,$piece,$part,$poffset)
-	}
+	my ($this, $seq, $name, $msg) = @_;
+	$this->sendPacket($msg);
+	$this->{wait_seq} = $seq;
+	$this->{wait_name} = $name;
 	return 1;
 }
 
