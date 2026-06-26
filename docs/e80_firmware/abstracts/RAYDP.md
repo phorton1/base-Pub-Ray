@@ -58,30 +58,42 @@ a `CLNet*Server` class); **3 are consume-only**.
 
 The table below is the headline view.
 
-| sid | hex  | firmware name      | serve? | empirical correspondence |
-| --- | ---- | ------------------ | :----: | ------------------------ |
-| 1   | 0x01 | Radar              | Y      | -- (no Radar attached) |
-| 5   | 0x05 | CFAccessController | Y      | FILESYS (port 2049 udp) |
-| 7   | 0x07 | Navigation         | Y      | Navig (port 2054 tcp) |
-| 8   | 0x08 | GPS                | Y      | func8_u/m (identified) |
-| 9   | 0x09 | AutoPilot          | Y      | func9_u/m (identified) |
-| 15  | 0x0f | Waypoint           | Y      | WPMGR (port 2052 tcp) |
-| 16  | 0x10 | Database           | Y      | Database (port 2050 tcp) + DBNAV (mcast) |
-| 19  | 0x13 | Track              | Y      | TRACK (port 2053 tcp) |
-| 20  | 0x14 | Flob               | **N**  | -- (consume-only; not previously observed) |
-| 21  | 0x15 | DGPS               | Y      | -- (not previously observed) |
-| 22  | 0x16 | HistData           | Y      | func22_t / FishHistory (decoded; TCP 2055) |
-| 23  | 0x17 | NavionicsChart     | **N**  | -- (consume-only; not previously observed) |
-| 24  | 0x18 | Sonar2             | Y      | -- (no sonar attached) |
-| 26  | 0x1a | Compass            | Y      | -- (not previously observed) |
-| 27  | 0x1b | Alarm              | Y      | Alarm (port 5801 mcast / 5802 udp) |
-| 28  | 0x1c | DigitalRadar       | **N**  | -- (consume-only; no radar attached) |
-| 29  | 0x1d | Navtex             | Y      | -- (not previously observed) |
-| 30  | 0x1e | AIS                | Y      | -- (no AIS receiver attached) |
-| 32  | 0x20 | Sonar3             | Y      | -- (no sonar attached) |
-| 35  | 0x23 | DataMaster         | Y      | func35_u/m (identified) |
-| --  | 0xdddd | Diagnostics      | Y      | Unadvertised; UDP 6667 (wire-tested) |
-| --  | 0xdddd | DiagnosticTCP    | Y      | Unadvertised; TCP 6668 (wire-tested) |
+| sid | hex    | firmware name      | serve? | tcp      | udp      | mcast    | empirical correspondence                   |
+| --- | ------ | ------------------ | :----: | :------: | :------: | :------: | ------------------------------------------ |
+| 1   | 0x01   | Radar              | Y      |          |          |          | -- (no Radar attached)                     |
+| 5   | 0x05   | CFAccessController | Y      |          | 2049     |          | FILESYS                                    |
+| 7   | 0x07   | Navigation         | Y      | 2054     |          |          | Navig                                      |
+| 8   | 0x08   | GPS                | Y      |          |          |          | func8_u/m (identified)                     |
+| 9   | 0x09   | AutoPilot          | Y      |          |          |          | func9_u/m (identified)                     |
+| 15  | 0x0f   | Waypoint           | Y      | 2052     |          |          | WPMGR                                      |
+| 16  | 0x10   | Database           | Y      | 2050     | 2051     | 2562     | Database + DBNAV                           |
+| 19  | 0x13   | Track              | Y      | 2053     |          |          | TRACK                                      |
+| 20  | 0x14   | Flob               | **N**  |          |          |          | -- (consume-only; not previously observed) |
+| 21  | 0x15   | DGPS               | Y      |          |          |          | -- (not previously observed)               |
+| 22  | 0x16   | HistData           | Y      | 2055     |          |          | func22_t / FishHistory (decoded)           |
+| 23  | 0x17   | NavionicsChart     | **N**  |          |          |          | -- (consume-only; not previously observed) |
+| 24  | 0x18   | Sonar2             | Y      |          |          |          | -- (no sonar attached)                     |
+| 26  | 0x1a   | Compass            | Y      |          |          |          | -- (not previously observed)               |
+| 27  | 0x1b   | Alarm              | Y      |          | 5802     | 5801     | Alarm                                      |
+| 28  | 0x1c   | DigitalRadar       | **N**  |          |          |          | -- (consume-only; no radar attached)       |
+| 29  | 0x1d   | Navtex             | Y      |          |          |          | -- (not previously observed)               |
+| 30  | 0x1e   | AIS                | Y      |          |          |          | -- (no AIS receiver attached)              |
+| 32  | 0x20   | Sonar3             | Y      |          |          |          | -- (no sonar attached)                     |
+| 35  | 0x23   | DataMaster         | Y      | **2048** |          | **2560** | func35_u/m (identified)                    |
+| --  | 0xdddd | Diagnostics        | Y      |          | **6667** |          | Unadvertised (wire-tested)                 |
+| --  | 0xdddd | DiagnosticTCP      | Y      | **6668** |          |          | Unadvertised (wire-tested)                 |
+
+**Serve-side ports.** The `tcp` / `udp` / `mcast` columns are the unit's own
+listening ports for each served service. **Bold** values are read directly from
+the firmware; plain values are observed on the wire -- and the firmware's
+first-free port allocator, which assigns these slots in a deterministic boot
+order, is what makes them permanently stable; a blank cell means no port has
+been observed for that transport. DataMaster's **2048** (first unicast claim) and
+**2560** (first multicast claim) are the allocator's anchor -- the absolute values
+the rest hang off in construction order; the other served numbers are
+wire-observed against that order. The diagnostics binds (**6667** / **6668**) are
+fixed in code, not allocator-assigned. GPS and AutoPilot are blank deliberately:
+the unit has never been seen advertising them, so their slots are not known.
 
 The firmware uses CapFirst single-token names for services in
 its internal source code. The `/raymarine/NET` docs sometimes use slightly

@@ -117,7 +117,9 @@ The instrument is the project's empirical channel past the runtime-wiring wall:
   its keyed-store records -- into the reply frame's `id` field (bytes 4-7), sourced
   from the system-info singleton (`SysInfo+0x50`). So the owner-id needed to re-key
   a panelset is readable with **zero peeks** from any reply; the echo-only TCP
-  companion on 6668 does **not** stamp it (it zeroes those bytes).
+  companion on 6668 does **not** stamp it (it zeroes those bytes). The singleton's full layout -- model, version,
+  and build stamp alongside the owner-id at `+0x50` -- is in
+  [architecture/runtime](../architecture/runtime.md).
 - **The full config round-trip is proven end-to-end -- so no second firmware mod is
   needed.** Reading and restoring all three persisted layers was demonstrated on E80-2
   over this one channel: write a page set, power-cycle so the apps self-mint default

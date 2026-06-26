@@ -407,6 +407,34 @@ is used by the dispatcher only as the zero-bias base for slot
 global-ctor registration), consumed elsewhere by the C++
 runtime support, not a section descriptor.
 
+## The SysInfo singleton
+
+A single **`.bss` global** holds the unit's identity and build stamp -- the
+system-info singleton named above as the source of the keyed store's owner word
+and of the diagnostics reply's source id
+([diagnostics](../deployment/diagnostics.md)). It sits at `0x016b55c4` --
+`0x364` into the `.bss` region established above -- so it is a **fixed address in
+this final-firmware image**, read at the same place every boot. A mod001
+peek / poke / call client ([mod001](../deployment/mod001.md)) reads the record
+directly off the running unit.
+
+The fields below are labeled by **what they decode to**; the stripped image
+attests none of these names. Offsets are from the singleton base; the string
+fields are NUL-terminated single-byte ASCII.
+
+| offset  | type      | field                      | decode |
+|---------|-----------|----------------------------|--------|
+| `+0x50` | uint32 LE | unit identity (machine id) | the unit's 32-bit machine id -- see [the machine id](overview.md) and the owner word above |
+| `+0x60` | char[16]  | model                      | text as stored |
+| `+0x88` | uint16    | version code               | `vMAJOR.MINOR`: major = code / 100, minor = code % 100 -- the stamp the [mod001 version record](../deployment/mod001.md) bumps |
+| `+0xdc` | char[32]  | build date                 | text as stored |
+| `+0xfc` | char[32]  | build descriptor           | text as stored |
+| `+0x11c`| char[16]  | build host                 | text as stored |
+
+The record body extends past these fields (a peek of `0x18c` bytes from the base
+captures them all). The string fields hold build-environment text; only their
+**offsets and types** are documented here, never their contents.
+
 ---
 
 **Next:** [services](services.md) ...

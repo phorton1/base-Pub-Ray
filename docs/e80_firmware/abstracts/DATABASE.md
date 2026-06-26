@@ -60,6 +60,9 @@ This document and its peers use the following terms precisely.
   stamp; for an NMEA 2000 source the stamp also carries the originating
   PGN and bus source-address. The family/class catalogue is
   [DB_DECODE](DB_DECODE.md); this document defines only the term.
+- **TTL** (time-to-live) -- a countdown timer carried in the multicast
+  (subscription) broadcast form of a record; when it reaches zero the E80
+  stops broadcasting that value.
 
 The database moves a single kind of record: the **value-record** -- a
 FID's value from one source: the value bytes (decoded per the FID's ENC)
@@ -128,7 +131,7 @@ RAYNET services; DB-specific pieces are added by the DB parser.
 | `zero` | 4 | u32 LE | the `seq` slot, zero in unsolicited (event) frames |
 
 `record` and the per-source descriptor it carries are defined in
-[DB_DECODE](DB_DECODE.md) (the ENC catalogue + the A/B/X source-provenance
+[DB_DECODE](DB_DECODE.md) (the ENC catalogue + the source-provenance
 decoder). The protocol treats `record` as an opaque blob -- length-
 prefixed by `biglen` in a TCP transaction, self-delimiting in a broadcast
 -- and never reads into it.
@@ -377,11 +380,11 @@ body:     num_fields  x  record            (broadcast form -- see DB_DECODE)
 - Unlike a TCP transaction, the broadcast has no per-record `biglen`
   prefix; the records are self-delimiting (each carries its own value
   length and descriptor length).
-- The broadcast record carries one broadcast-only field, `ttl`, that
-  drives the consumer's cull timer (a fid is emitted only while it
-  currently has a valid value). Its byte position is part of the
-  broadcast-form record layout in [DB_DECODE](DB_DECODE.md); its role is
-  the cull timer.
+- The broadcast record carries one broadcast-only field, the **TTL** -- a
+  countdown timer that drives the consumer's cull timer (a fid is emitted
+  only while it currently has a valid value). Its byte position is part of
+  the broadcast-form record layout in [DB_DECODE](DB_DECODE.md); its role
+  is the cull timer.
 - Maximum packet 1000 bytes; a new packet starts on overflow.
 
 The packet header and the 0x300 value broadcast are confirmed against the

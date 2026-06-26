@@ -84,16 +84,19 @@ A broadcast packet is a *list*: a header followed by N value-records. A
 point-to-point read or write carries one record per transaction. Either
 way the unit of decoding is a single value-record.
 
-## Anatomy of a record
+## TCP (Transaction) versus Multicast (Broadcast) record formats
 
 Every record shares a three-zone shape: a **header** identifying the FID
 and its encoding, the **value**, and a **source tail**. The layout is
 code-confirmed in
 `DataProviderItem_serializeToSink` (@0x459c) and its tail helper
-(@0x92d0), and wire-confirmed on the live unit.
+(@0x92d0), and wire-confirmed on a live unit.
 
 A record is serialized two ways depending on how it travels. Both agree
 on the header; they pack the tail differently.
+
+
+### Transaction form
 
 **Transaction form** (a QUERY reply or a write, inside an INFO
 transaction). All little-endian:
@@ -104,17 +107,23 @@ enc        (2)        the encoding-type id (this catalogue)
 size       (2)        byte length of the value
 reserved   (4)        zero in practice
 value      (size)     the datum -- decode per enc
-A          (4)        SOURCE family (low byte meaningful)
-B          (4)        SOURCE class  (low byte meaningful)
-src-len    (2)        descriptor length: 6 for an N2K source, else 0
+src_family (4)        source family (low byte meaningful)
+src_class  (4)        source class  (low byte meaningful)
+desc_len   (2)        descriptor length: 6 for an N2K source, else 0
 pad        (2)        zero
-descriptor (src-len)  the N2K source descriptor (below), when src-len > 0
+descriptor (desc_len) the N2K source descriptor (below), when desc_len > 0
 ```
 
 The transaction's frame length (`biglen`, owned by DATABASE) brackets
-exactly this record: `biglen = 12 (header) + size + 12 + src-len`.
+exactly this record: `biglen = 12 (header) + size + 12 + desc_len`.
 Verified against live captures (depth `12+4+12 = 0x1c`, latlon
 `12+8+12 = 0x20`).
+
+The transaction form spells out both source words -- `src_family |
+src_class | desc_len | descriptor`.
+
+
+### Broadcast form
 
 **Broadcast form** (a FIELD or UUID multicast record). Same header; a
 compact, self-delimiting tail with a time-to-live:
@@ -122,29 +131,32 @@ compact, self-delimiting tail with a time-to-live:
 ```
 fid        (4)
 enc        (2)
-len        (2)        = size
-data       (len)      the value (decode per enc)
-type8      (1)        the source FAMILY (= A), low byte
-ttl        (1)        broadcast time-to-live -- a delivery field (its role is DATABASE's)
-extra_len  (2)        length of the trailing descriptor block
-extra      (extra_len) the source descriptor (the N2K [PGN|SA|flag]), when present
+size       (2)
+value      (size)     the datum -- decode per enc
+src_family (1)        source family, low byte
+ttl        (1)        broadcast countdown timer -- see [DATABASE](DATABASE.md)
+desc_len   (2)        descriptor length
+descriptor (desc_len) the N2K source descriptor [PGN|SA|flag], when desc_len > 0
 ```
 
-So the source stamp rides both forms, but they keep different parts of
-it. The transaction form spells out both source words -- `A | B | src-len
-| descriptor`. The broadcast form keeps only the source **family**, packed
-to the one-byte `type8` (= `A`'s low byte), plus the descriptor in
-`extra`, and adds a `ttl`; **it drops the source class (`B`) entirely** --
-a broadcast record carries the family but not the class. (Firmware-
-confirmed: `type8` is the same field the transaction tail writes as `A`.)
+The broadcast form keeps only the
+source **family**, packed to a single byte (`src_family`'s low byte), plus
+the `descriptor`, and **adds a `ttl`**.
 
-There is no separate directory record to lay out. The directory broadcast
-(0x301) emits the same value-record per source -- identical in layout to
+
+### Directory versus Value Records
+
+There is no separate directory record to lay out.
+The directory broadcast (0x301) emits the same value-record per source -- identical in layout to
 the value broadcast (0x300) -- and simply enumerates *all* of a FID's
-sources rather than just the preferred one. (Firmware-confirmed via the
+sources rather than just the preferred one.
+
+(Firmware-confirmed via the
 directory packet builder; the 0x300 value broadcast is also wire-confirmed
 via `d_DBNAV`, the 0x301 directory broadcast established from the
 firmware -- a live 0x301 capture would be the final empirical check.)
+
+
 
 ## The value axis: the ENC catalogue
 
@@ -336,18 +348,18 @@ The `var` (packed-struct) types -- positions, GPS/GNSS/DSC/autopilot
 families, unit identity -- decode per their own sub-layouts, a second
 tier below the scalar codecs.
 
-## The source axis: the A / B / X provenance stamp
+## The source axis: the provenance stamp
 
-The record tail stamps **where a value came from**. `A` and `B` are
-runtime, last-writer-wins values: they describe the source that last fed
+The record tail stamps **where a value came from**. `src_family` and
+`src_class` are runtime, last-writer-wins values: they describe the source that last fed
 *this* value, not a fixed attribute of the FID (a FID shows whichever
 family last wrote it). The full mechanism and the firmware call chain are
 in the source-descriptor analysis.
 
-**A = source family** (the kind of producing engine):
+**`src_family` -- source family** (the kind of producing engine):
 
-| A | family |
-|---|--------|
+| src_family | family |
+|------------|--------|
 | 4 | NMEA 2000 bus (carries a descriptor) |
 | 5 | NMEA 0183 |
 | 7 | application / configuration set |
@@ -356,17 +368,17 @@ in the source-descriptor analysis.
 | 12 | GPS / compass fusion |
 | 15 | heading / COG primary |
 
-**B = source class** (a sub-tag within a family):
+**`src_class` -- source class** (a sub-tag within a family):
 
-| B | meaning | within |
-|---|---------|--------|
+| src_class | meaning | within |
+|-----------|---------|--------|
 | 5 | basic instrument (depth/speed/heading/wind) | family 9 |
 | 0 | log / computed / config | families 7, 9, 10 |
 | 12 | waypoint | family 9 |
 | 30 | GPS | family 9 |
 | 0x19 | the N2K class tag | family 4 |
 
-**X = the N2K source descriptor** (`src-len = 6`, NMEA 2000 only):
+**`descriptor` -- the N2K source descriptor** (`desc_len = 6`, NMEA 2000 only):
 
 ```
 PGN (4)  |  SA (1)  |  flag (1)
@@ -377,7 +389,7 @@ PGN (4)  |  SA (1)  |  flag (1)
 - **flag** -- a static per-handler byte; `0` for most handlers, `1` for
   the Engine-Rapid handler (PGN 127488).
 
-0183, SeaTalk, and computed sources carry no descriptor (`src-len = 0`).
+0183, SeaTalk, and computed sources carry no descriptor (`desc_len = 0`).
 
 **PGN -> FID** is a separate, firmware-derived table (one PGN feeds
 several FIDs; e.g. PGN 128267 feeds FIDs `0x09`/`0x0a`). The authoritative
