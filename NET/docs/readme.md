@@ -176,7 +176,7 @@ NET modules follow a layered naming convention (one letter prefix per layer):
 | Prefix | Layer        | Examples                                                        |
 | ------ | ------------ | --------------------------------------------------------------- |
 | a_     | Definitions  | a_defs.pm - feature flags, shared constants                     |
-| b_     | Base classes | b_sock.pm - socket base; b_parser.pm; b_probe.pm; b_records.pm |
+| b_     | Base classes | b_sock.pm - socket base; b_parser.pm; b_records.pm |
 | c_     | RAYDP        | c_RAYDP.pm - discovery protocol                                 |
 | d_     | Services     | d_WPMGR.pm, d_TRACK.pm, d_FILESYS.pm, d_DB.pm                  |
 | e_     | APIs         | e_wp_api.pm, e_wp_defs.pm - WPMGR API and constants             |

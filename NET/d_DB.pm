@@ -4,8 +4,7 @@
 # The point-to-point control side of the E80 Database service (the broadcast
 # side is d_DBNAV.pm; both are service_id 16 / 0x10).  This module implements
 # the full firmware protocol decoded in docs/e80_firmware (DATABASE.md /
-# DB_DECODE.md / DB_FIDS.md) and wire-confirmed against
-# NET/docs/logs/rns_db_field_enum.txt:
+# DB_DECODE.md / DB_FIDS.md):
 #
 #   - subscribe (SUB_VALUE / SUB_DIR) -- adds a fid to the DBNAV broadcast;
 #   - read    (getItem  -> CMD_GET_VALUE) -- the preferred source's value
@@ -115,7 +114,7 @@ our $SUCCESS2_SIG = '04000000';
 
 # Command codes are the LOW byte of the 16-bit cmd_word; the high byte is the
 # $DIRECTION_* nibble (a_defs).  The full firmware cmd_word is shown in each
-# comment.  Wire-confirmed against NET/docs/logs/rns_db_field_enum.txt.
+# comment.
 
 # requests (client -> server, used with $DIRECTION_SEND)
 our $DB_CMD_SUB_DIR    = 0x00;	# 0x100 RegisterForUpdates           subscribe all of a fid's sources

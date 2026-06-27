@@ -69,7 +69,7 @@ The `x1` and `x2` fields in the header are present in all packets but their
 meaning has not been fully decoded. The `type` field is 0 for all observed E80
 advertisements.
 
-Example decoded RAYDP session at startup (from `NET/docs/logs/raydp_startup_capture.txt`).
+Example decoded RAYDP session at startup.
 The `RAYDP` prefix in the log lines is the implementation's label in `c_RAYDP.pm`:
 
 ```

@@ -199,16 +199,8 @@ sub sendUDP
 
 	if (1)
 	{
-		if ($this->{is_probe})
-		{
-			printConsole(0,0,$UTILS_COLOR_WHITE,"$this->{name} --> $dest_ip:$dest_port $name");
-			printConsole(0,0,parse_dwords(pad('',13),$payload,1));
-		}
-		else
-		{
-			my $packet = $this->makeUDPPacket(0,$payload);
-			$this->{parser}->doParseUDP($packet);
-		}
+		my $packet = $this->makeUDPPacket(0,$payload);
+		$this->{parser}->doParseUDP($packet);
 	}
 
     if (!$LOCAL_UDP_SOCKET)
@@ -798,12 +790,6 @@ sub sockThread
 							my $msg = substr($this->{buffer}, 2, $msg_len);
 							$this->{buffer} = substr($this->{buffer}, 2 + $msg_len);
 
-							if ($this->{is_probe})
-							{
-								$this->{probe_wait} = 0;
-								next;
-							}
-
 							my $reply = $this->{parser}->dispatchTCPRecvMsg($msg);
 							if ($reply)
 							{
@@ -838,11 +824,7 @@ sub sockThread
 							display($dbg_thread+1,0,"sockThread got parsePacket reply="._def($reply))
 								if $this->{name} ne 'RAYDP';
 
-							if ($this->{is_probe})
-							{
-								$this->{probe_wait} = 0;
-							}
-							elsif ($reply)
+							if ($reply)
 							{
 								if ($reply->{seq_num})
 								{
@@ -923,22 +905,7 @@ sub commandThread
 		{
 			display($dbg_cmd,0,"b_sock commandThread($this->{name}) starting command($command->{name})");
 
-			# implicit knowledge of tcpProbe addon
-
-			if ($command->{name} =~ /^PROBE/)
-			{
-				my $save_in = $this->{show_input};
-				my $save_out = $this->{show_output};
-				$this->{show_input} = 1;
-				$this->{show_output} = 1;
-				$this->do_probe($command);
-				$this->{show_input} = $save_in;
-				$this->{show_output} = $save_out;
-			}
-			else
-			{
-				my $rslt = $this->handleCommand($command);
-			}
+			my $rslt = $this->handleCommand($command);
 
 			display($dbg_cmd,0,"b_sock commandThread($this->{name}) finished command($command->{name})");
 		}

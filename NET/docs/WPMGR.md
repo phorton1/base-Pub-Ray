@@ -393,13 +393,6 @@ of each new request (detected by `DIRECTION_SEND`). This design correctly handle
 large multi-message replies - such as deleting a route with many waypoints - where
 the E80's reply spans multiple TCP segments.
 
-## Early Discovery Notes
-
-The raw command discovery table from early analysis (predating the `e_wp_defs.pm`
-constants) is preserved in
-[`NET/docs/notes/wpmgr_command_discovery.md`](notes/wpmgr_command_discovery.md).
-Command names there differ from the current code constants.
-
 ---
 
 **Next:** [TRACK](TRACK.md)

@@ -970,7 +970,7 @@ sub parsePoint
 # Track-writer encoders -- symmetric counterparts to parseMTA /
 # parseTRK / parsePoint, used by NET/d_TRACK_writer.pm to
 # emit the wire format described in
-# navMate e80_stuff/abstracts/TRACK_writing.md.
+# docs/e80_firmware/abstracts/TRACK_writing.md.
 #
 # Each function returns the exact byte string for its piece of
 # the writer protocol.  buildMTA expects the caller to pass

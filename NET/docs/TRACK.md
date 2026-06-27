@@ -29,7 +29,7 @@ Otherwise the protocol is fully bidirectional. The client can name, save, discar
 or erase tracks; can retrieve any saved track (MTA + points) by UUID; and can
 upload a complete saved track from the client into the E80 via a transient
 one-track-per-session writer protocol -- see
-**[TRACK_writing.md](https://github.com/phorton1/base-apps-navMate/blob/master/e80_stuff/abstracts/TRACK_writing.md)** for the full writer-session spec.
+**[TRACK_writing.md](../../docs/e80_firmware/abstracts/TRACK_writing.md)** for the full writer-session spec.
 
 ## Command Table
 
@@ -143,7 +143,7 @@ The writer session is a transient, one-track-per-session sub-protocol for upload
 complete track from the client into the E80. It runs over the same TCP service (port
 2053) and message envelope as the rest of TRACK, but a single TCP connection uploads
 exactly one track and is then closed. The full wire specification lives in
-[`TRACK_writing.md`](https://github.com/phorton1/base-apps-navMate/blob/master/e80_stuff/abstracts/TRACK_writing.md) (in navMate); this section documents the commands
+[`TRACK_writing.md`](../../docs/e80_firmware/abstracts/TRACK_writing.md); this section documents the commands
 it introduces and how they relate to the rest of the protocol.
 
 ### Commands the writer adds
@@ -174,7 +174,7 @@ E80    -> SAVED { seq, success }          auto-save fires; end of session
 The E80 auto-saves and emits `SAVED` once the cumulative delivered point count reaches
 the MTA's `cnt1`; there is no per-frame acknowledgment. Closing the TCP connection before
 `SAVED` discards the in-progress track, and resending `RECORD` at any point aborts the
-upload. See [`TRACK_writing.md`](https://github.com/phorton1/base-apps-navMate/blob/master/e80_stuff/abstracts/TRACK_writing.md) (in navMate) for the body-group wire
+upload. See [`TRACK_writing.md`](../../docs/e80_firmware/abstracts/TRACK_writing.md) for the body-group wire
 form, MTA writer-side field values, the `cnt1` contract, and device limits.
 
 ### SAVED status codes
@@ -190,7 +190,7 @@ The `SAVED` `success` field reports the outcome of the auto-save:
 database; uploading under an existing UUID fails with `0x80040f07` rather than
 overwriting. Any `success` value other than `0x00040000`, or a missing reply, is a failed
 save. (Storage-full and point-count failures are covered under "Device limits" in
-[`TRACK_writing.md`](https://github.com/phorton1/base-apps-navMate/blob/master/e80_stuff/abstracts/TRACK_writing.md) (in navMate).)
+[`TRACK_writing.md`](../../docs/e80_firmware/abstracts/TRACK_writing.md).)
 
 ## Important: GET_STATE Before GET_CUR2
 
@@ -237,12 +237,6 @@ track point buffer comes back empty. The `buffer_complete` / `expect_trk` logic
 in `e_TRACK.pm` does not yet correctly handle the GET_CUR2 wire sequence. The
 track lifecycle (start/stop/name/save) works correctly; only the live
 current-track point-readback is affected.
-
-## Early Discovery Notes
-
-Annotated hex captures from the discovery of the GET_DICT command and the MTA
-structure parsing session are preserved in
-[`NET/docs/notes/track_protocol_notes.md`](notes/track_protocol_notes.md).
 
 ---
 
