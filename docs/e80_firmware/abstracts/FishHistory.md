@@ -35,8 +35,8 @@ same scroll-back and graphs the originating unit has.
 
 It is an **advertised, served** RAYNET service: it appears in the
 RAYDP catalog at SID 0x16 and the E80 hosts it on TCP 2055. It
-has long been observed on the wire under the working name `func22_t`,
-emitting events as soon as a client connects.
+has long been observed on the wire, emitting events as soon as a
+client connects.
 
 ## Not the navigation database
 

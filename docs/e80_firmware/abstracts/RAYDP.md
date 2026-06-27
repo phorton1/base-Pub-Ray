@@ -58,42 +58,76 @@ a `CLNet*Server` class); **3 are consume-only**.
 
 The table below is the headline view.
 
-| sid | hex    | firmware name      | serve? | tcp      | udp      | mcast    | empirical correspondence                   |
-| --- | ------ | ------------------ | :----: | :------: | :------: | :------: | ------------------------------------------ |
-| 1   | 0x01   | Radar              | Y      |          |          |          | -- (no Radar attached)                     |
-| 5   | 0x05   | CFAccessController | Y      |          | 2049     |          | FILESYS                                    |
-| 7   | 0x07   | Navigation         | Y      | 2054     |          |          | Navig                                      |
-| 8   | 0x08   | GPS                | Y      |          |          |          | func8_u/m (identified)                     |
-| 9   | 0x09   | AutoPilot          | Y      |          |          |          | func9_u/m (identified)                     |
-| 15  | 0x0f   | Waypoint           | Y      | 2052     |          |          | WPMGR                                      |
-| 16  | 0x10   | Database           | Y      | 2050     | 2051     | 2562     | Database + DBNAV                           |
-| 19  | 0x13   | Track              | Y      | 2053     |          |          | TRACK                                      |
-| 20  | 0x14   | Flob               | **N**  |          |          |          | -- (consume-only; not previously observed) |
-| 21  | 0x15   | DGPS               | Y      |          |          |          | -- (not previously observed)               |
-| 22  | 0x16   | HistData           | Y      | 2055     |          |          | func22_t / FishHistory (decoded)           |
-| 23  | 0x17   | NavionicsChart     | **N**  |          |          |          | -- (consume-only; not previously observed) |
-| 24  | 0x18   | Sonar2             | Y      |          |          |          | -- (no sonar attached)                     |
-| 26  | 0x1a   | Compass            | Y      |          |          |          | -- (not previously observed)               |
-| 27  | 0x1b   | Alarm              | Y      |          | 5802     | 5801     | Alarm                                      |
-| 28  | 0x1c   | DigitalRadar       | **N**  |          |          |          | -- (consume-only; no radar attached)       |
-| 29  | 0x1d   | Navtex             | Y      |          |          |          | -- (not previously observed)               |
-| 30  | 0x1e   | AIS                | Y      |          |          |          | -- (no AIS receiver attached)              |
-| 32  | 0x20   | Sonar3             | Y      |          |          |          | -- (no sonar attached)                     |
-| 35  | 0x23   | DataMaster         | Y      | **2048** |          | **2560** | func35_u/m (identified)                    |
-| --  | 0xdddd | Diagnostics        | Y      |          | **6667** |          | Unadvertised (wire-tested)                 |
-| --  | 0xdddd | DiagnosticTCP      | Y      | **6668** |          |          | Unadvertised (wire-tested)                 |
+| sid | hex    | firmware name      | serve? |   tcp    |   udp    |  mcast   | Pub::Ray name                 | E80 Service Name |
+| --- | ------ | ------------------ | :----: | :------: | :------: | :------: | ----------------------------- | ---------------- |
+| 1   | 0x01   | Radar              |   Y    |          |  2056+   |  2563+   | Radar                         | Radar            |
+| 5   | 0x05   | CFAccessController |   Y    |          | **2049** | **2561** | [FILESYS](FILESYS.md)         | CF Access        |
+| 7   | 0x07   | Navigation         |   Y    | **2054** |          |          | Navig                         | Navigation       |
+| 8   | 0x08   | GPS                |   Y    |          |  2056+   |  2563+   | [Gps](GPS.md)                 | GPS              |
+| 9   | 0x09   | AutoPilot          |   Y    |          |  2056+   |  2563+   | [AutoPilot](AutoPilot.md)     | Auto Pilot       |
+| 15  | 0x0f   | Waypoint           |   Y    | **2052** |          |          | [WPMGR](WPMGR.md)             | Waypoint         |
+| 16  | 0x10   | Database           |   Y    | **2050** | **2051** | **2562** | [DB + DBNAV](DATABASE.md)     | Database         |
+| 19  | 0x13   | Track              |   Y    | **2053** |          |          | [TRACK](TRACK.md)             | Track            |
+| 20  | 0x14   | Flob               | **N**  |          |          |          | (consume only)                | --               |
+| 21  | 0x15   | DGPS               |   Y    |          |  2056+   |  2563+   | Dgps                          | DGPS             |
+| 22  | 0x16   | HistData           |   Y    | **2055** |          |          | [FishHistory](FishHistory.md) | --               |
+| 23  | 0x17   | NavionicsChart     | **N**  |          |          |          | (consume only)                | Chart            |
+| 24  | 0x18   | Sonar2             |   Y    |          |  2056+   |  2563+   | [Sonar2](Sonar.md)            | Fishfinder       |
+| 26  | 0x1a   | Compass            |   Y    |          |  2056+   |  2563+   | [Compass](Compass.md)         | Compass          |
+| 27  | 0x1b   | Alarm              |   Y    |          | **5802** | **5801** | Alarm                         | Alarm            |
+| 28  | 0x1c   | DigitalRadar       | **N**  |          |          |          | (consume only)                | --               |
+| 29  | 0x1d   | Navtex             |   Y    |          |  2056+   |  2563+   | [Navtex](Navtex.md)           | Navtex           |
+| 30  | 0x1e   | AIS                |   Y    |          |  2056+   |  2563+   | [Ais](AIS.md)                 | AIS              |
+| 32  | 0x20   | Sonar3             |   Y    |          |  2056+   |  2563+   | [Sonar3](Sonar.md)            | Fishfinder       |
+| 35  | 0x23   | DataMaster         |   Y    |          | **2048** | **2560** | DataMaster                    | --               |
+| --  | 0xdddd | Diagnostics        |   Y    |          | **6667** |          | Diagnostics                   | --               |
+| --  | 0xdddd | DiagnosticTCP      |   Y    | **6668** |          |          | DiagnosticTCP                 | --               |
 
-**Serve-side ports.** The `tcp` / `udp` / `mcast` columns are the unit's own
-listening ports for each served service. **Bold** values are read directly from
-the firmware; plain values are observed on the wire -- and the firmware's
-first-free port allocator, which assigns these slots in a deterministic boot
-order, is what makes them permanently stable; a blank cell means no port has
-been observed for that transport. DataMaster's **2048** (first unicast claim) and
-**2560** (first multicast claim) are the allocator's anchor -- the absolute values
-the rest hang off in construction order; the other served numbers are
-wire-observed against that order. The diagnostics binds (**6667** / **6668**) are
-fixed in code, not allocator-assigned. GPS and AutoPilot are blank deliberately:
-the unit has never been seen advertising them, so their slots are not known.
+**E80 Service Name.** The `E80 Service Name` column is the label the unit shows
+for each service on its own diagnostics screen (*Setup > System Diagnostics >
+External Interfaces > SeaTalk HS (Ethernet) > Services*). That screen enumerates
+services by an internal diagnostics service-type index that is independent of the
+SID; the names are the unit's own (note the spacing differences from the firmware
+class names -- "CF Access" vs `CFAccessController`, "Auto Pilot" vs `AutoPilot`).
+Two consequences:
+
+- **One name can span two SIDs, and consume-only services still appear.** Sonar2
+  (24) and Sonar3 (32) share the single **Fishfinder** slot, so the same name
+  sits on both rows. **Chart** is the consume-only NavionicsChart (23) -- the
+  screen counts consumed traffic, so a consume-only service is still listed.
+- **`--` means the service is not on that screen.** Flob (20) and DigitalRadar
+  (28) are consume-only and never tracked there; DataMaster (35), HistData (22),
+  and the Diagnostics / DiagnosticTCP binds use diagnostics service-types outside
+  the screen's range. The screen additionally lists five E80-internal services
+  that carry no SID -- Sys, GVM, Monitor, Keyboard, and RML Monitors -- so they
+  have no row in this SID catalog.
+
+**Serve-side ports.** The `tcp` / `udp` / `mcast` columns are the unit's own listening ports per
+served service. **Bold** = firmware-confirmed: read directly from the unit's live service registry,
+or (the diagnostics binds) fixed in code. Plain = observed on the wire or a dynamic value; a blank
+cell means the service does not present that transport.
+
+Served services split into two classes by *when* they construct:
+
+- **Always-on (fixed ports).** Eight services construct unconditionally at boot, claiming unicast
+  slots **2048-2055** and the first three mcast slots **2560-2562** in a fixed construction order
+  (DataMaster, FILESYS, DataBase, DBNAV, Waypoint, Track, Navigation, HistData). All eight unicast
+  ports are firmware-confirmed: 2048-2050 and 2052-2055 read directly from the live service
+  registry; 2051 (DBNAV, DataBase's broadcaster) is the one unicast slot claimed by a sub-server
+  that does not separately register, identified via the allocator's claim bitmap. The three mcast
+  slots are DataMaster 2560, FILESYS 2561, and DataBase/DBNAV 2562.
+- **On-demand (dynamic ports, written `N+`).** The instrument/sensor services -- GPS, AutoPilot,
+  Radar, Sonar2/3, DGPS, Compass, Navtex, AIS -- construct **only when their data or hardware first
+  appears**, each claiming the *next free* unicast slot from **2056+** and mcast slot from **2563+**.
+  The exact number is therefore not fixed per service: it depends on the unit's configuration and
+  the order instruments come up. Demonstrated on the bench -- with GPS+AutoPilot both fed they took
+  2056/2057; with AutoPilot alone it moved to 2056. These services present **udp + mcast** (the
+  unicast is udp -- confirmed for GPS/AutoPilot; the rest share the identical source constructor).
+
+The diagnostics binds (**6667** / **6668**) are fixed in code, not allocator-assigned; Alarm uses
+fixed ports **5801** (mcast) / **5802** (udp), also outside the allocator. DataMaster presents no
+tcp port: it binds udp source endpoints (not an InterNiche TCP listener), so its 0x28 advertisement
+carries its udp and mcast ports, not a tcp+udp pair.
 
 The firmware uses CapFirst single-token names for services in
 its internal source code. The `/raymarine/NET` docs sometimes use slightly
@@ -112,6 +146,41 @@ piRadar plugin only, FILESYS, Navigation, GPS, AutoPilot via
 empirical port observation, WPMGR, Database, Track, Alarm,
 HistData), the corresponding Server class is in the catalog --
 that confirms the structural test for the cases that can be verified.
+
+## Multicast group addressing
+
+A served service's multicast **port** is a fixed, allocator-assigned number
+(the bold `mcast` cells above -- DataMaster 2560, FILESYS 2561, Database/DBNAV
+2562, and the instrument tail from 2563). Its multicast **IP group** is *not* a
+constant: the firmware derives it from the unit's own IP address, so it cannot
+be a column here -- two E80s on one network serve the same service on the same
+mcast port but on different groups. (This is separate from the fixed RAYDP
+*discovery* group 224.0.0.1:5800, which every unit shares.)
+
+The firmware (`RAYDP_allocMcastIp`) computes each group as:
+
+```
+mcast_ip = 224.0.0.0 + (unit_low16 << 5) + (mcast_port - 2559)
+```
+
+`unit_low16` is the low 16 bits of the unit's IPv4 address -- its last two
+octets, `(octet3 << 8) | octet4`. (Equivalently the firmware adds `slot + 1`,
+where `slot = mcast_port - 2560` is the service's mcast construction index.)
+Every group lands inside `224.0.0.0/8`, and each unit gets its own block keyed
+by its address, so units never collide.
+
+Worked example for an E80 at **10.0.240.83** (`unit_low16 = 0xF053`):
+
+| Service          | Mcast port | Group (this unit) |
+| ---------------- | :--------: | ----------------- |
+| DataMaster       |    2560    | 224.30.10.97      |
+| FILESYS          |    2561    | 224.30.10.98      |
+| Database / DBNAV |    2562    | 224.30.10.99      |
+
+Those groups are specific to that one unit's address -- recompute from the
+formula for any other unit (the same rule covers the dynamic instrument tail on
+2563+). A client receives a service's stream by joining `group:mcast_port` on
+its E80-facing interface.
 
 ## The consume-only services
 
@@ -135,11 +204,51 @@ For these three, "not observed" is the architectural answer:
 the E80 will *never* advertise them no matter what hardware is
 attached, because no Server class exists in the firmware.
 
-## Services not documented in specific *.md files
+## E80 Services
 
-The services below exist on the wire but do not have their own
-abstract document. They are unadvertised -- they have no
-`CLNet*ServiceInfo` and do not appear in
+Read in the order the unit's own "Services" diagnostics screen presents them
+(see the `E80 Service Name` column above), the twenty entries map back to SIDs
+as follows. This is the screen's fixed order -- the firmware's internal
+diagnostics service-type index, a numbering of its own that is unrelated to the
+SID.
+
+| Named Service | sid(s) |
+| ------------- | ------ |
+| Radar         | 1      |
+| Fishfinder    | 24, 32 |
+| Database      | 16     |
+| Waypoint      | 15     |
+| Track         | 19     |
+| Navigation    | 7      |
+| Chart         | 23     |
+| CF Access     | 5      |
+| GPS           | 8      |
+| DGPS          | 21     |
+| Compass       | 26     |
+| Navtex        | 29     |
+| AIS           | 30     |
+| Auto Pilot    | 9      |
+| Alarm         | 27     |
+| Sys           | --     |
+| GVM           | --     |
+| Monitor       | --     |
+| Keyboard      | --     |
+| RML Monitors  | --     |
+
+The first fifteen are the advertised services from the catalog above
+(Fishfinder spans both sonar SIDs; Chart is the consume-only NavionicsChart).
+The **last five -- Sys, GVM, Monitor, Keyboard, RML Monitors -- carry no
+advertised SID**: they have no `CLNet*ServiceInfo` and never pass through
+`RAYDP_dispatchAdvertisement`, so the service-discovery catalog cannot see them.
+That absence is itself a lead -- the unit is accounting network traffic for
+interfaces or protocols not yet identified here (an external-keyboard function
+of some kind, plus four other internal channels), whose wire form remains to be
+determined.
+
+## Unadvertised Services
+
+The services below exist on the wire but are unadvertised --
+they have no `CLNet*ServiceInfo` and do not appear in
 `RAYDP_dispatchAdvertisement` -- yet both bind sockets and accept
 connections, reachable on the wire if you know where to look.
 
@@ -300,11 +409,12 @@ empirically-derived packet length variants in
 | 0x28 (40) | tcp ip + two ports + mcast ip:port       | Database, AutoPilot, NavionicsChart, Navtex, DataMaster |
 | 0x34 (52) | new variant -- not previously observed   | Sonar3 |
 
-The 52-byte variant is the new finding -- specific to Sonar3,
-it suggests the Sonar3 advertisement carries more state than
-the existing variants (possibly a second channel ip:port pair,
-or a hardware-config byte field). The Sonar3 factory body has
-not yet been decompiled to confirm.
+The 52-byte variant is specific to Sonar3: its factory stores four
+extra words (vs Sonar2's 36-byte form) -- additional channel ip:port
+endpoints -- consistent with Sonar3 being the newer, multi-channel
+sonar protocol generation. The Sonar2 / Sonar3 split, and how the
+registration tag selects the matching consume-source, is decoded in
+[Sonar](Sonar.md).
 
 ## Discovery flow
 

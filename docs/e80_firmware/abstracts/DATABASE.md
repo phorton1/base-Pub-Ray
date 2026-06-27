@@ -21,7 +21,9 @@ It presents itself as two service-ports at IP addresses published by
 RAYDP:
 
 - DATABASE on TCP port 2050 at the E80's native IP address;
-- DBNAV as a multicast broadcaster at 224.30.38.195:2562.
+- DBNAV as a multicast broadcaster on UDP 2562, at a per-unit group derived
+  from the unit IP (see [Multicast group addressing](RAYDP.md#multicast-group-addressing);
+  e.g. 224.30.10.99 for a unit at 10.0.240.83).
 
 DATABASE is both a subscription manager and a point-to-point read/write
 interface; DBNAV is the broadcast side of the subscription process. The
@@ -349,7 +351,7 @@ PUSH_VALUE. A delete emits the announce only. The push reuses the same
 record serializer as the solicited read, through a separate
 per-connection sink, with `seq` hardcoded to `zero`.
 
-## DBNAV multicast broadcast (UDP 224.30.38.195:2562)
+## DBNAV multicast broadcast (UDP 2562)
 
 A second service-port carries the periodic broadcast of subscribed
 instrument fids. This is what the DBNAV listener receives in full,

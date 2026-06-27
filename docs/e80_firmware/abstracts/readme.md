@@ -56,9 +56,43 @@ Per-service (priority-ordered):
   anatomy, the ENC catalogue that decodes a value, and the A/B/X
   source-provenance stamp. A DATABASE component.
 
-Ancillary abstractions (linked here, deliberately kept out of the
-header menu and the Next cycle so further probes can be added
-without churning the navigation):
+Additional (unimplemented) services -- RAYDP catalog services whose wire
+protocol is decoded here but which are not yet implemented in
+/raymarine/NET. Linked from here and from the RAYDP catalog's Pub::Ray
+column, but deliberately kept out of the header menu and the Next cycle
+so services can be added without churning the navigation:
+
+- **[FishHistory.md](FishHistory.md)** -- the fishfinder
+  instrument-history service (firmware HistData, SID 0x16 / TCP
+  2055); command structure and buffer
+  geometry decoded; the project's name for the not-yet-implemented
+  /NET service.
+- **[AutoPilot.md](AutoPilot.md)** -- the autopilot service (firmware
+  AutoPilot, SID 0x09 / UDP); the five-message protocol and the 61-byte
+  NewPilotData report decoded, including the SetPilotStatus control path;
+  a natural candidate for a /NET decoder.
+- **[GPS.md](GPS.md)** -- the GPS service (firmware GPS, SID 0x08 / UDP);
+  the ten-message protocol decoded -- one 626-byte UpdateGPSStatus report
+  (scalar fix block + two 32-entry satellite tables) and nine receiver
+  configuration commands.
+- **[Compass.md](Compass.md)** -- the compass service (firmware Compass,
+  SID 0x1a / UDP); the five-message protocol decoded -- a 25-byte
+  UpdateCompassStatus report plus three calibration actions and a
+  SetHeadingOffset command.
+- **[Navtex.md](Navtex.md)** -- the NAVTEX service (firmware Navtex, SID
+  0x1d / UDP); a message-store protocol -- chunked MessageUpdate reassembly
+  plus AlertCleared / MessageDeleted mutations and a get-all replay.
+- **[AIS.md](AIS.md)** -- the AIS service (firmware AIS, SID 0x1e / UDP);
+  a thirteen-message database protocol -- target store, alarm list,
+  safety-related messages and transceiver state, and six commands
+  including a unicast GetAllSRMs reply.
+- **[Sonar.md](Sonar.md)** -- the sonar / fishfinder service, both
+  generations: Sonar2 (SID 0x18) and Sonar3 (SID 0x20), one user-facing
+  "Fishfinder". The shared 0x18 ping/echo stream plus each generation's
+  configuration messages decoded; report-only, no command surface.
+
+Ancillary abstractions -- useful write-ups that are not RAYDP catalog
+services, kept out of the header menu under the same rationale:
 
 - **[TFTP.md](TFTP.md)** -- standard RFC 1350 TFTP server compiled
   into e80.bin; listener bound on UDP 69 (wire-confirmed); both GET
@@ -66,11 +100,6 @@ without churning the navigation):
   normally flipped via a debug-shell text-CLI menu. Not part of
   /raymarine/NET; a generic file-transfer surface alongside the
   Raymarine wire services.
-- **[FishHistory.md](FishHistory.md)** -- the fishfinder
-  instrument-history service (firmware HistData, SID 0x16 / TCP
-  2055, observed as `func22_t`); command structure and buffer
-  geometry decoded; the project's name for the not-yet-implemented
-  /NET service.
 - **[Config.md](Config.md)** -- configuration of the persistent
   page sets and the Data application's data panels: the five page
   sets and their 600-byte on-flash layout blocks (consolidated in
