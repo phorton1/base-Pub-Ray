@@ -40,6 +40,10 @@ mode and steering state (the firmware enumerates `STANDBY`, `AUTO`,
 `None`/no-pilot state, each with a `Straight`/`Turning` sub-state) plus a
 small set of numeric steering values and two name fields.
 
+For where this service sits in the larger navigator -> autopilot -> rudder data
+flow -- and how it relates to the [Navig](Navig.md) service that feeds it -- see
+[RAYNET -> Navigation and autopilot data flow](RAYNET.md#navigation-and-autopilot-data-flow).
+
 ## Transport and framing
 
 AutoPilot is a UDP service on the on-demand instrument tail (it constructs

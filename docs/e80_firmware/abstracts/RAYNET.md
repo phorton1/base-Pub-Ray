@@ -163,6 +163,107 @@ without round-tripping through RNS, database-write to push a
 custom field to subscribers), the firmware-side path exists
 for both.
 
+## The multi-display LAN: master serves, repeaters consume
+
+These services exist primarily so that **several displays on one boat share a
+single picture.** A typical install has more than one MFD -- a master at a
+protected nav station and one or more repeaters at exposed helms -- on the same
+SeatalkHS Ethernet LAN, optionally with a PC (RayTech RNS, as it was branded then)
+as another node. The services are this network's **shared control plane**:
+bidirectional command + readback, so any display can both *mirror* the shared
+navigation / waypoint / pilot / database state and *act on it* (start a Goto from
+the flybridge, acknowledge an alarm from the helm). RNS was one possible node; the
+design target was N displays acting as one system.
+
+Which unit serves which service follows **physical ownership**. The **master** is
+the unit wired to the instrument network -- all the SeaTalk / N2K data lands there
+-- so it is the source for the instrument, navigation, and database services
+([RAYDP](RAYDP.md)'s serve=Y set), and it advertises them. A **repeater** whose
+only link is the Ethernet cable owns no instruments, so it serves only the
+resources local to *it*: its own CF card (FILESYS) and its own alarm annunciator
+(Alarm). Everything else it consumes from the master over the one wire.
+
+This matches what is seen on the wire: on a two-unit boat the master advertises the
+full service set while the repeater advertises only FILESYS and (sometimes) Alarm.
+That observation is about **advertisement**; whether a repeater still *constructs*
+the other services internally in a dormant, unadvertised state, or never
+constructs them at all, is not yet determined -- a two-unit bench capture would
+settle it.
+
+The practical consequence for `/raymarine/NET`: **point a client at the master.**
+The repeater is nearly silent on RAYDP and is not where the shared services live.
+
+## Navigation and autopilot data flow
+
+The per-service docs describe each service in isolation; this is where two of
+them connect to the boat. [Navig](Navig.md) (SID 7) and
+[AutoPilot](AutoPilot.md) (SID 9) only make sense against the larger
+route-following chain they sit on -- and that chain is mostly **general marine
+architecture**, not E80-specific.
+
+**Two jobs, two boxes.** Following a route splits into two separate jobs that, on
+a boat, are usually two separate devices:
+
+- a **navigator** decides *where to go* -- it takes a position (GPS) and a
+  destination (a waypoint, or the active leg of a route) and continuously computes
+  the steering solution: bearing to the mark, distance to it, and cross-track
+  error (XTE, how far off the intended line the boat has drifted);
+- an **autopilot** decides *how to turn the rudder* to get there -- a course
+  computer driving a rudder actuator.
+
+A standalone autopilot can hold a compass heading or a wind angle on its own, but
+it has no chart and no waypoints; to follow a route ("Track" mode) it must be fed
+bearing and XTE by an external navigator.
+
+**The E80 is the navigator.** When a user selects Goto Waypoint or Follow Route,
+the E80's navigation engine runs that computation from the live fix and the chosen
+destination, and emits the solution onto the boat wire (Seatalk, NMEA0183,
+NMEA2000). An autopilot in Track mode consumes it and steers:
+
+```
+   GPS fix  +  chosen destination
+        |
+        v
+   E80 navigation engine        computes bearing / distance / XTE
+        |   (Seatalk / 0183 / N2K nav messages: RMB, APB, XTE, ...)
+        v
+   autopilot course computer    (Track mode) drives the rudder
+        |
+        v
+   rudder
+```
+
+"**Upstream**" means exactly this ordering: the navigator produces the target; the
+autopilot follows it. The solution flows from the navigator down to the steerer.
+
+**The E80 wears two hats.** It can *originate* navigation (the user picks a
+destination on the E80; the engine computes and outputs the solution) or merely
+*repeat* it (another device is navigating, and the E80 displays the incoming
+target and XTE). Same numbers on the screen, opposite direction of flow. Both are
+normal -- and the distinction matters when deriving the Navig wire semantics: a
+clean capture comes from the E80 *originating*, so the engine is unambiguously the
+source.
+
+**Where the two Ethernet services sit.** Navig and AutoPilot are **SeatalkHS
+(Ethernet) faces** of the E80's own subsystems, used by another networked
+Raymarine display or by RNS to remote-control and mirror the unit. They are the
+display-to-display layer -- **not** how the E80 talks to a Seatalk-connected pilot
+(that conversation is on the Seatalk1 wire, alongside the nav messages above):
+
+- **[Navig](Navig.md) (SID 7)** is the Ethernet face of the navigation *engine* --
+  control + readback for active navigation (set the destination; read the active
+  destination and the computed solution).
+- **[AutoPilot](AutoPilot.md) (SID 9)** is the Ethernet face of the E80's pilot
+  *control panel* -- engage/disengage, change mode, nudge heading -- which the E80
+  relays onward to a connected pilot.
+
+So Navig is the network knob for the box that decides *where to go*, and AutoPilot
+is the network knob for the box that decides *how to turn the wheel*; the first
+feeds the second. The boat-level chain (navigator versus autopilot, Track mode) is
+standard marine architecture; what the firmware exploration establishes is that
+these two services are the SeatalkHS control/readback faces of the E80's ends of
+it. The per-command semantics of Navig are not yet pinned (see [Navig](Navig.md)).
+
 ## Cross-cutting impacts on `/raymarine/NET`
 
 A few framings worth holding across services:

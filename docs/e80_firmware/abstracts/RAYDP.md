@@ -62,22 +62,22 @@ The table below is the headline view.
 | --- | ------ | ------------------ | :----: | :------: | :------: | :------: | ----------------------------- | ---------------- |
 | 1   | 0x01   | Radar              |   Y    |          |  2056+   |  2563+   | Radar                         | Radar            |
 | 5   | 0x05   | CFAccessController |   Y    |          | **2049** | **2561** | [FILESYS](FILESYS.md)         | CF Access        |
-| 7   | 0x07   | Navigation         |   Y    | **2054** |          |          | Navig                         | Navigation       |
-| 8   | 0x08   | GPS                |   Y    |          |  2056+   |  2563+   | [Gps](GPS.md)                 | GPS              |
+| 7   | 0x07   | Navigation         |   Y    | **2054** |          |          | [Navig](Navig.md)             | Navigation       |
+| 8   | 0x08   | GPS                |   Y    |          |  2056+   |  2563+   | [Gps](Gps.md)                 | GPS              |
 | 9   | 0x09   | AutoPilot          |   Y    |          |  2056+   |  2563+   | [AutoPilot](AutoPilot.md)     | Auto Pilot       |
 | 15  | 0x0f   | Waypoint           |   Y    | **2052** |          |          | [WPMGR](WPMGR.md)             | Waypoint         |
 | 16  | 0x10   | Database           |   Y    | **2050** | **2051** | **2562** | [DB + DBNAV](DATABASE.md)     | Database         |
 | 19  | 0x13   | Track              |   Y    | **2053** |          |          | [TRACK](TRACK.md)             | Track            |
 | 20  | 0x14   | Flob               | **N**  |          |          |          | (consume only)                | --               |
-| 21  | 0x15   | DGPS               |   Y    |          |  2056+   |  2563+   | Dgps                          | DGPS             |
+| 21  | 0x15   | DGPS               |   Y    |          |  2056+   |  2563+   | [Dgps](Dgps.md)               | DGPS             |
 | 22  | 0x16   | HistData           |   Y    | **2055** |          |          | [FishHistory](FishHistory.md) | --               |
 | 23  | 0x17   | NavionicsChart     | **N**  |          |          |          | (consume only)                | Chart            |
 | 24  | 0x18   | Sonar2             |   Y    |          |  2056+   |  2563+   | [Sonar2](Sonar.md)            | Fishfinder       |
 | 26  | 0x1a   | Compass            |   Y    |          |  2056+   |  2563+   | [Compass](Compass.md)         | Compass          |
-| 27  | 0x1b   | Alarm              |   Y    |          | **5802** | **5801** | Alarm                         | Alarm            |
+| 27  | 0x1b   | Alarm              |   Y    |          | **5802** | **5801** | [Alarm](Alarm.md)             | Alarm            |
 | 28  | 0x1c   | DigitalRadar       | **N**  |          |          |          | (consume only)                | --               |
 | 29  | 0x1d   | Navtex             |   Y    |          |  2056+   |  2563+   | [Navtex](Navtex.md)           | Navtex           |
-| 30  | 0x1e   | AIS                |   Y    |          |  2056+   |  2563+   | [Ais](AIS.md)                 | AIS              |
+| 30  | 0x1e   | AIS                |   Y    |          |  2056+   |  2563+   | [Ais](Ais.md)                 | AIS              |
 | 32  | 0x20   | Sonar3             |   Y    |          |  2056+   |  2563+   | [Sonar3](Sonar.md)            | Fishfinder       |
 | 35  | 0x23   | DataMaster         |   Y    |          | **2048** | **2560** | DataMaster                    | --               |
 | --  | 0xdddd | Diagnostics        |   Y    |          | **6667** |          | Diagnostics                   | --               |
