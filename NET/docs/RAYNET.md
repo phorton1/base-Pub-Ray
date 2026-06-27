@@ -263,14 +263,10 @@ particular service_id. The convention follows a maturity tier:
 		placeholder that identifies its state of maturity;
 		not extensively probed
 
-		alarm		- udp
-		database	- udp
-		func8_m		- mcast
-		func8_u		- udp
-		func22_t	- tcp
-		func35_m	- mcast
-		func35_u	- udp
-		hidden_t	- tcp
+		alarm_u		- udp
+		data_udp	- udp
+		filecast	- mcast
+		chart		- udp
 
 	Question Mark
 

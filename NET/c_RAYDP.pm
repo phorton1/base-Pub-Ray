@@ -152,7 +152,7 @@ sub new
 	my ($class) = @_;
 	display($dbg_raydp,0,"c_RAYDP new()");
 
-	my $this = shared_clone($SERVICE_PORT_DEFS{$RAYDP_PORT});
+	my $this = shared_clone($FIXED_PORT_DEFS{$RAYDP_PORT});
 	mergeHash($this, shared_clone({
 		name 			=> $RAYDP_NAME,
 		proto			=> 'mcast',
@@ -309,21 +309,28 @@ sub addServicePort
 		return 0;	# not new
 	}
 
-	my $def = $SERVICE_PORT_DEFS{$port};	# not shared
-	my $mon_defs = $SHARK_DEFAULTS{$port};	# shared
-	
-	if (!$def)
+	# A fixed port is identified by its port number; the instrument tail is
+	# identified by the wire sid, with the proto coming from the advertisement
+	# slot (a multicast ip means the mcast face, otherwise the unicast udp face).
+
+	my $def = $FIXED_PORT_DEFS{$port};	# not shared
+	my $mon_defs;
+
+	if ($def)
 	{
-		error("NO DEFINITION FOR SERVICE_PORT($port)");
+		$mon_defs = $SHARK_DEFAULTS{$port};	# shared
+	}
+	else
+	{
+		my $sid = $rec->{service_id};
+		my ($octet1) = split(/\./,$ip);
+		my $proto = ($octet1 >= 224 && $octet1 <= 239) ? 'mcast' : 'udp';
+		my $tail = $TAIL_SERVICE_DEFS{$sid};
 		$def = {
-			sid		=> -2,
-			name	=> 'unknown',
-			proto	=> '', };
-		$mon_defs = shared_clone({
-			mon_in	=> $MON_ALL,
-			mon_out	=> $MON_ALL,
-			in_color => $UTILS_COLOR_RED,
-			out_color => $UTILS_COLOR_RED, });
+			sid		=> $sid,
+			name	=> $tail ? $tail->{name} : "sid$sid",
+			proto	=> $proto, };
+		$mon_defs = tailMonDefs($sid,$proto,0);
 	}
 
 	
@@ -416,7 +423,7 @@ sub _decode_header
 
 		if ($field =~ /^port/)	# for non-multicast ports, show my guess as to the internet protocol
 		{
-			my $def = $SERVICE_PORT_DEFS{$value};
+			my $def = $FIXED_PORT_DEFS{$value};
 			my $proto = $def ? $def->{proto} : '';
 			$text .= "$field($value)='$proto' ";
 		}

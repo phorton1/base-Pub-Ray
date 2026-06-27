@@ -59,38 +59,57 @@ reflect the current level of understanding of that port:
   yet fully decoded or implemented. Examples: Database, Navig, Alarm.
 - **lowercase** - a port observed in traffic, either a secondary
   protocol variant of an identified service, or not yet associated with any
-  known Raymarine function. Examples: func8_ub, func35_m, alarm, hidden_t.
+  known Raymarine function. Examples: data_udp, filecast, chart.
 
 The full RAYNAME convention and the protocol architecture that underlies all
 services are documented in **[RAYNET](RAYNET.md)**.
 
-| Port  | Proto | SID | RAYNAME   | Status      | Description                          |
-| ----- | ----- | --- | --------- | ----------- | ------------------------------------ |
-| 5800  | mcast |  0  | RAYDP     | Implemented | Service discovery (224.0.0.1:5800)   |
-| 2052  | tcp   | 15  | WPMGR     | Implemented | Waypoint / Route / Group management  |
-| 2053  | tcp   | 19  | TRACK     | Implemented | Track management                     |
-| 2049  | udp   |  5  | FILESYS   | Implemented | CF card filesystem access (read-only)|
-| 2050  | tcp   | 16  | Database  | Implemented | Navigation field database (TCP)      |
-| 2562  | mcast | 16  | DBNAV     | Implemented | Navigation data broadcast            |
-| 2054  | tcp   |  7  | Navig     | Observed    | Navigation TCP - not decoded         |
-| 2055  | tcp   | 22  | func22_t  | Observed    | Gets 9-byte msgs - not decoded       |
-| 5801  | mcast | 27  | Alarm     | Observed    | Alarm multicast - not decoded        |
-| 5802  | udp   | 27  | alarm     | Observed    | Alarm UDP - not decoded              |
-| 2048  | udp   | 35  | func35_u  | Observed    | Appears with teensyBoat active       |
-| 2051  | udp   | 16  | database  | Observed    | DB UDP variant - not decoded         |
-| 2056  | udp   |  8  | func8_ub  | Observed    | Appears with teensyBoat compass/GPS  |
-| 2057  | udp   |  9  | func9_u   | Observed    | Appears with RNS and E80 Fix/Heading |
-| 2560  | mcast | 35  | func35_m  | Observed    | Multicast variant of func35          |
-| 2561  | mcast |  5  | filesys   | Observed    | FILESYS multicast - purpose unclear  |
-| 2563  | mcast |  8  | func8_mb  | Observed    | Packets seen when RNS running        |
-| 2564  | mcast |  9  | func9_m   | Observed    | Appears with RNS and E80 Fix/Heading |
-| 6668  | tcp   | -   | hidden_t  | Observed    | Found by port scan, not advertised   |
-| 18432 | udp   |  5  | FILE_RNS  | Identified  | RNS's FILESYS listener port          |
-| 18433 | udp   |  5  | MY_FILE   | Identified  | shark's FILESYS listener port        |
+**Fixed ports** -- the port number is deterministic and known before any
+advertisement (the always-on allocator block, the Alarm and RAYDP binds, the
+unadvertised diagnostics binds, and the FILESYS listener ports):
 
-Ports 2048-2055 and 2560-2562 appear on a bare E80. Ports 2056 and 2563 appear only
-when teensyBoat is providing compass and GPS. Ports 2057 and 2564 appear when RNS
-is running and the E80 is underway.
+| Port  | Proto | SID    | RAYNAME       | Status      | Description                          |
+| ----- | ----- | ------ | ------------- | ----------- | ------------------------------------ |
+| 5800  | mcast |  0     | RAYDP         | Implemented | Service discovery (224.0.0.1:5800)   |
+| 2048  | udp   | 35     | DataMaster    | Observed    | Appears with teensyBoat active       |
+| 2049  | udp   |  5     | FILESYS       | Implemented | CF card filesystem access (read-only)|
+| 2050  | tcp   | 16     | DB            | Implemented | Navigation field database (TCP)      |
+| 2051  | udp   | 16     | data_udp      | Observed    | Database UDP variant - not decoded   |
+| 2052  | tcp   | 15     | WPMGR         | Implemented | Waypoint / Route / Group management  |
+| 2053  | tcp   | 19     | TRACK         | Implemented | Track management                     |
+| 2054  | tcp   |  7     | Navig         | Observed    | Navigation TCP - not decoded         |
+| 2055  | tcp   | 22     | FishHistory   | Observed    | Gets 9-byte msgs - not decoded       |
+| 2560  | mcast | 35     | DataMaster    | Observed    | DataMaster multicast                 |
+| 2561  | mcast |  5     | filecast      | Observed    | FILESYS multicast - purpose unclear  |
+| 2562  | mcast | 16     | DBNAV         | Implemented | Navigation data broadcast            |
+| 5801  | mcast | 27     | Alarm         | Observed    | Alarm multicast - not decoded        |
+| 5802  | udp   | 27     | alarm_u       | Observed    | Alarm UDP - not decoded              |
+| 6667  | udp   | 0xdddd | Diagnostics   | Observed    | Unadvertised diagnostics (UDP)       |
+| 6668  | tcp   | 0xdddd | DiagnosticTCP | Observed    | Unadvertised diagnostics (TCP)       |
+| 18432 | udp   |  5     | FILE_RNS      | Identified  | RNS's FILESYS listener port          |
+| 18433 | udp   |  5     | MY_FILE       | Identified  | shark's FILESYS listener port        |
+
+Ports 2048-2055 and 2560-2562 appear on a bare E80; the diagnostics binds (6667/6668)
+are unadvertised and reached only by pre-seeding.
+
+**Instrument tail** -- these services take a port first-come from 2056+ (unicast) and
+2563+ (mcast) as their data or hardware appears, so the port is not fixed; the wire SID
+identifies the service:
+
+| SID | RAYNAME   | Service    |
+| --- | --------- | ---------- |
+|  1  | Radar     | Radar      |
+|  8  | Gps       | GPS        |
+|  9  | AutoPilot | Auto Pilot |
+| 21  | Dgps      | DGPS       |
+| 24  | Sonar2    | Fishfinder |
+| 26  | Compass   | Compass    |
+| 29  | Navtex    | Navtex     |
+| 30  | Ais       | AIS        |
+| 32  | Sonar3    | Fishfinder |
+
+For example GPS (SID 8) and AutoPilot (SID 9) were seen at 2056/2057 and 2563/2564 in
+one configuration, but those numbers shift as instruments come and go.
 
 ### Protocol Documentation
 
@@ -168,8 +187,6 @@ NET modules follow a layered naming convention (one letter prefix per layer):
 `s_server.pm` (port 9882) and navMate's `nmServer.pm` (port 9883) each extend it with
 app-specific endpoints.
 
-Supporting files in the NET/ root (not layered): `rayports.pm` (port/service_id table),
-`fshWriter.pm` (writes FSH files from live E80 data), `b_probe.pm` (file-driven probe system).
 
 **TCP stream parsing:** All TCP-based services (WPMGR, TRACK, Database, Sniffer) use a
 **stream-based message extraction model** in `b_sock.pm`. Each TCP connection maintains a

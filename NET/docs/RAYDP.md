@@ -90,6 +90,23 @@ RAYDP 36:0 E80 #1   func(35)     mcast_ip(224.30.38.193) mcast_port(2560) ip(10.
 
 Note that both the E80 and RNS advertise func(27)/Alarm on port 5802.
 
+## Fixed and dynamic (tail) ports
+
+The advertised ports fall into two groups. The **fixed** ports are deterministic and
+known before any advertisement: the always-on allocator block (2048-2055 unicast,
+2560-2562 mcast - DataMaster, FILESYS, Database/DBNAV, Waypoint, Track, Navigation,
+FishHistory) plus the Alarm (5801/5802) and RAYDP (5800) binds. These are keyed by port
+in `%FIXED_PORT_DEFS`.
+
+The **instrument tail** services - GPS, AutoPilot, Radar, Sonar, DGPS, Compass, Navtex,
+AIS - construct only when their data or hardware appears, each claiming the next free
+unicast port from 2056+ and mcast port from 2563+. Their port is therefore *not*
+deterministic: identity comes from the wire SID in the advertisement header, not the
+port number (turning a GPS source off and rebooting, for example, moves the AutoPilot
+port). These are keyed by SID in `%TAIL_SERVICE_DEFS`, and `c_RAYDP.pm` resolves a
+discovered tail port by its SID, with the proto taken from the advertisement slot
+(multicast address vs unicast).
+
 ## IDENT Packets
 
 In addition to service advertisements, devices send **IDENT** packets that identify

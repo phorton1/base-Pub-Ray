@@ -45,6 +45,10 @@ BEGIN
 
 		%SHARK_DEFAULTS
 		%SNIFFER_DEFAULTS
+		%SHARK_TAIL_DEFAULTS
+		%SNIFFER_TAIL_DEFAULTS
+
+		tailMonDefs
 
 		$MONITOR_API_BUILDS
 
@@ -115,7 +119,7 @@ our $MON_HEADER				= 0x0001;			# the packet header with source and destination a
 our $MON_RAW				= 0x0002;			# the raw messages, tcp with length WORD, all with CMD_WORD, DWORDS, and ascii
 our $MON_MULTI				= 0x0004;			# show full raw messages vs only the first line of DWORDS
 
-our $MON_PARSE				= 0x0010;			# show parsing of ind			ividual messages within a packet
+our $MON_PARSE				= 0x0010;			# show parsing of individual messages within a packet
 our $MON_PIECES				= 0x0020;			# show the pieces parsed out of individual messages
 our $MON_DICT				= 0x0040;			# show the uuids in parsed dictionariees
 
@@ -169,14 +173,14 @@ our $MONITOR_API_BUILDS :shared = 0; #$MON_REC | $MON_REC_DETAILS | $MON_PACK | 
 # which corresponds to REPLY and REQUEST
 
 our %SHARK_DEFAULTS;
-for my $port (keys %SERVICE_PORT_DEFS)
+for my $port (keys %FIXED_PORT_DEFS)
 {
 	my $def = $SHARK_DEFAULTS{$port} = shared_clone({});
-	mergeHash($def,$SERVICE_PORT_DEFS{$port});
+	mergeHash($def,$FIXED_PORT_DEFS{$port});
 
 	$def->{active}		= 0;
 	$def->{log}			= 0;	# $MON_WRITE_LOG;
-	
+
 	$def->{is_shark} 	= 1;
 	$def->{is_sniffer}	= 0;
 	$def->{mon_in}		= $MON_ALL;
@@ -285,16 +289,54 @@ if (0)
 
 
 #======================================================================
+# Shark Defaults for the instrument tail
+#======================================================================
+# The tail services take a runtime port, so their monitor defaults are kept
+# by "sid:proto" and merged onto a service_port by c_RAYDP when it is
+# discovered.  None are implemented, so there are no per-service overrides.
+
+our %SHARK_TAIL_DEFAULTS;
+for my $sid (keys %TAIL_SERVICE_DEFS)
+{
+	my $svc = $TAIL_SERVICE_DEFS{$sid};
+	for my $proto (@{$svc->{protos}})
+	{
+		my $def = $SHARK_TAIL_DEFAULTS{"$sid:$proto"} = shared_clone({});
+		$def->{sid}			= $sid;
+		$def->{name}		= $svc->{name};
+		$def->{proto}		= $proto;
+		$def->{active}		= 0;
+		$def->{log}			= 0;	# $MON_WRITE_LOG;
+		$def->{is_shark}	= 1;
+		$def->{is_sniffer}	= 0;
+		$def->{mon_in}		= $MON_ALL;
+		$def->{mon_out}		= $MON_ALL;
+		$def->{in_color}	= 0;
+		$def->{out_color}	= 0;
+	}
+}
+
+# apply the $MON_SRC_SHARK bits to %SHARK_TAIL_DEFAULTS
+
+for my $key (keys %SHARK_TAIL_DEFAULTS)
+{
+	my $def = $SHARK_TAIL_DEFAULTS{$key};
+	$def->{mon_in}  |= $MON_SRC_SHARK;
+	$def->{mon_out} |= $MON_SRC_SHARK;
+}
+
+
+#======================================================================
 # SNIFFER defaults
 #======================================================================
 # completely separated from SHARK_DEFAULTS
-# and regenerated from scratch from SERVICE_PORT_DEFS
+# and regenerated from scratch from FIXED_PORT_DEFS
 
 our %SNIFFER_DEFAULTS;
-for my $port (keys %SERVICE_PORT_DEFS)
+for my $port (keys %FIXED_PORT_DEFS)
 {
 	my $def = $SNIFFER_DEFAULTS{$port} = shared_clone({});
-	mergeHash($def,$SERVICE_PORT_DEFS{$port});
+	mergeHash($def,$FIXED_PORT_DEFS{$port});
 
 	$def->{active}		= 0;
 	$def->{log}			= 0;	# $MON_WRITE_LOG;
@@ -363,6 +405,59 @@ mergeHash($SNIFFER_DEFAULTS{$SPORT_DB},{
 	mon_out 		=> $MON_ALL,
 	in_color		=> $UTILS_COLOR_LIGHT_GREEN,
 	out_color		=> $UTILS_COLOR_YELLOW, });
+
+
+#======================================================================
+# SNIFFER defaults for the instrument tail
+#======================================================================
+# the by-"sid:proto" companion to %SNIFFER_DEFAULTS
+
+our %SNIFFER_TAIL_DEFAULTS;
+for my $sid (keys %TAIL_SERVICE_DEFS)
+{
+	my $svc = $TAIL_SERVICE_DEFS{$sid};
+	for my $proto (@{$svc->{protos}})
+	{
+		my $def = $SNIFFER_TAIL_DEFAULTS{"$sid:$proto"} = shared_clone({});
+		$def->{sid}			= $sid;
+		$def->{name}		= $svc->{name};
+		$def->{proto}		= $proto;
+		$def->{active}		= 0;
+		$def->{log}			= 0;	# $MON_WRITE_LOG;
+		$def->{is_shark}	= 0;
+		$def->{is_sniffer}	= 1;
+		$def->{mon_in}		= $MON_ALL;
+		$def->{mon_out}		= $MON_ALL;
+		$def->{in_color}	= 0;
+		$def->{out_color}	= 0;
+	}
+}
+
+
+#======================================================================
+# tailMonDefs
+#======================================================================
+# the shared monitor-defaults for a discovered tail service_port, by its wire
+# sid and the proto of the advertisement slot.  c_RAYDP calls this in place of
+# the by-port lookup it does for fixed ports.
+
+sub tailMonDefs
+{
+	my ($sid,$proto,$is_sniffer) = @_;
+	my $table = $is_sniffer ? \%SNIFFER_TAIL_DEFAULTS : \%SHARK_TAIL_DEFAULTS;
+	return $table->{"$sid:$proto"} || shared_clone({
+		sid			=> $sid,
+		name		=> "sid$sid",
+		proto		=> $proto,
+		active		=> 0,
+		log			=> 0,
+		is_shark	=> $is_sniffer ? 0 : 1,
+		is_sniffer	=> $is_sniffer ? 1 : 0,
+		mon_in		=> $MON_ALL,
+		mon_out		=> $MON_ALL,
+		in_color	=> 0,
+		out_color	=> 0, });
+}
 
 
 
