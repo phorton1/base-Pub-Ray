@@ -159,6 +159,31 @@ unit identity in the owner word is sourced from the system-info singleton -- the
 same word the diagnostics reply stamps as its source id
 ([diagnostics](../deployment/diagnostics.md)).
 
+### Reaching the live store object at runtime
+
+`readByKey` / `writeByKey` / `deleteByKey` take the store object (`this`) as their
+first argument, so any client that drives the store from outside must hold that
+pointer. The `CFlobFilesystem` object is **heap-allocated** -- its constructor
+`rm_malloc`s a 0x48-byte object -- so its address is **per-boot and per-unit** and
+must be **resolved at runtime, never hardcoded**. The local NOR store's live `this`
+is reached through a stable mount-state pointer:
+
+```
+store this = *( *(0x000942f0) + 4 )
+```
+
+`0x000942f0` (`localFlob_mountState_ptr`) points to a two-word mount-state struct
+`{ init_flag, CFlobFilesystem* }`; `localFlob_mount` builds the store
+(`localFlob_createFilesystem`, over the raw-NOR driver) on first use and caches its
+pointer in slot `+4`. A resolved object is integrity-checked by its word0 vtable,
+`0x0155e214` (the `CFlobFilesystem` vtable). The record primitives are non-virtual:
+`readByKey` `0x004bbff4`, `writeByKey` `0x004bbda4`, `deleteByKey` `0x004bccd8`,
+each called as `(store this, ...)`.
+
+One near-namesake to avoid: `flobStore_getInstance` (the pointer at `0x004c0170`)
+returns a **different** object -- a flob tag-index manager (vtable `0x0155e54c`),
+not this keyed store. Resolve the store only through the mount-state path above.
+
 ### Open edges
 
 The store mechanics, and the finding that WGRT shares this store, are
