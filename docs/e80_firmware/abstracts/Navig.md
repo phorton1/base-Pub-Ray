@@ -1,20 +1,6 @@
 # Navig
 
-**[Abstracts](readme.md)** --
-**[RAYNET](RAYNET.md)** --
-**[RAYDP](RAYDP.md)** --
-**[WPMGR](WPMGR.md)** --
-**[TRACK](TRACK.md)** --
-**[FILESYS](FILESYS.md)** --
-**[DATABASE](DATABASE.md)** --
-**[DB_FIDS](DB_FIDS.md)** --
-**[DB_DECODE](DB_DECODE.md)**
-
-folders: **[Home](../readme.md)** --
-**[Architecture](../architecture/readme.md)** --
-**Abstracts** --
-**[Deployment](../deployment/readme.md)** --
-**[Cleanroom](../cleanroom.md)**
+Return to [**Abstracts**](readme.md)
 
 The active-navigation service: the network face of the E80's "navigate to"
 function -- the state the unit enters when a **Goto Waypoint** or **Follow Route**
@@ -238,4 +224,4 @@ autopilot-facing navigation state and are out of scope for passive use.
 
 ---
 
-**Next:** [Home (Abstracts)](readme.md) ...
+Return to [**Abstracts**](readme.md)

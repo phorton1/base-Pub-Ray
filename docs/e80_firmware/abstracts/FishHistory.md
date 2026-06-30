@@ -1,20 +1,6 @@
 # FishHistory
 
-**[Abstracts](readme.md)** --
-**[RAYNET](RAYNET.md)** --
-**[RAYDP](RAYDP.md)** --
-**[WPMGR](WPMGR.md)** --
-**[TRACK](TRACK.md)** --
-**[FILESYS](FILESYS.md)** --
-**[DATABASE](DATABASE.md)** --
-**[DB_FIDS](DB_FIDS.md)** --
-**[DB_DECODE](DB_DECODE.md)**
-
-folders: **[Home](../readme.md)** --
-**[Architecture](../architecture/readme.md)** --
-**Abstracts** --
-**[Deployment](../deployment/readme.md)** --
-**[Cleanroom](../cleanroom.md)**
+Return to [**Abstracts**](readme.md)
 
 The fishfinder instrument-history service: the time-series of
 sounder-derived values the E80 keeps and serves over the network.
@@ -126,4 +112,4 @@ the producer side; they are noted here as the open edge.
 
 ---
 
-**Next:** [Home (Abstracts)](readme.md) ...
+Return to [**Abstracts**](readme.md)

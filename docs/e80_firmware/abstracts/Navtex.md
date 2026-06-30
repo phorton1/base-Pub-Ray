@@ -1,20 +1,6 @@
 # Navtex
 
-**[Abstracts](readme.md)** --
-**[RAYNET](RAYNET.md)** --
-**[RAYDP](RAYDP.md)** --
-**[WPMGR](WPMGR.md)** --
-**[TRACK](TRACK.md)** --
-**[FILESYS](FILESYS.md)** --
-**[DATABASE](DATABASE.md)** --
-**[DB_FIDS](DB_FIDS.md)** --
-**[DB_DECODE](DB_DECODE.md)**
-
-folders: **[Home](../readme.md)** --
-**[Architecture](../architecture/readme.md)** --
-**Abstracts** --
-**[Deployment](../deployment/readme.md)** --
-**[Cleanroom](../cleanroom.md)**
+Return to [**Abstracts**](readme.md)
 
 The NAVTEX network service: how the E80 republishes received NAVTEX text
 messages onto SeaTalkHS as a shared message store, and how a networked client
@@ -161,4 +147,4 @@ commands act on the unit's message store and are out of scope for passive use.
 
 ---
 
-**Next:** [Home (Abstracts)](readme.md) ...
+Return to [**Abstracts**](readme.md)

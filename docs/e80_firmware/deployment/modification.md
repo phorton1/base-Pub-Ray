@@ -4,8 +4,8 @@
 **[containers](containers.md)** --
 **[installer](installer.md)** --
 **[bootloader](bootloader.md)** --
-**[modification](modification.md)** --
-**mods** --
+**modification** --
+**[mods](mods.md)** --
 **[diagnostics](diagnostics.md)**
 
 folders: **[Home](../readme.md)** --

@@ -1,20 +1,6 @@
 # Sonar
 
-**[Abstracts](readme.md)** --
-**[RAYNET](RAYNET.md)** --
-**[RAYDP](RAYDP.md)** --
-**[WPMGR](WPMGR.md)** --
-**[TRACK](TRACK.md)** --
-**[FILESYS](FILESYS.md)** --
-**[DATABASE](DATABASE.md)** --
-**[DB_FIDS](DB_FIDS.md)** --
-**[DB_DECODE](DB_DECODE.md)**
-
-folders: **[Home](../readme.md)** --
-**[Architecture](../architecture/readme.md)** --
-**Abstracts** --
-**[Deployment](../deployment/readme.md)** --
-**[Cleanroom](../cleanroom.md)**
+Return to [**Abstracts**](readme.md)
 
 The sonar / fishfinder network service: how the E80 republishes a DSM (Digital
 Sounder Module) sonar's echo data and configuration onto SeaTalkHS, and the
@@ -277,4 +263,4 @@ read-side monitoring -- there is no control surface to worry about here.
 
 ---
 
-**Next:** [Home (Abstracts)](readme.md) ...
+Return to [**Abstracts**](readme.md)

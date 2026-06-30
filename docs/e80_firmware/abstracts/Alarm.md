@@ -1,20 +1,6 @@
 # Alarm
 
-**[Abstracts](readme.md)** --
-**[RAYNET](RAYNET.md)** --
-**[RAYDP](RAYDP.md)** --
-**[WPMGR](WPMGR.md)** --
-**[TRACK](TRACK.md)** --
-**[FILESYS](FILESYS.md)** --
-**[DATABASE](DATABASE.md)** --
-**[DB_FIDS](DB_FIDS.md)** --
-**[DB_DECODE](DB_DECODE.md)**
-
-folders: **[Home](../readme.md)** --
-**[Architecture](../architecture/readme.md)** --
-**Abstracts** --
-**[Deployment](../deployment/readme.md)** --
-**[Cleanroom](../cleanroom.md)**
+Return to [**Abstracts**](readme.md)
 
 The network alarm service: how the E80 (and RNS) announce alarm events onto
 SeaTalkHS and how a client acknowledges/controls them. RAYDP **SID 27 (0x1b)**,
@@ -129,4 +115,4 @@ control side acts on real alarm state and is out of scope for passive use.
 
 ---
 
-**Next:** [Home (Abstracts)](readme.md) ...
+Return to [**Abstracts**](readme.md)
