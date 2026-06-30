@@ -17,6 +17,11 @@ import format used by Raytech RNS. It includes working Perl implementations of
 the protocols, tools for reading and writing FSH files, and tools for converting
 navigation data between formats.
 
+A companion line of work documents the **[E80 firmware](e80_firmware/readme.md)** itself -
+an independent study of the Raymarine E80 multifunction-display firmware artifact: its
+architecture, the networked-service abstracts mapped to the NET protocols, the deployment
+and modification scheme, and the cleanroom methodology behind it.
+
 The primary goal is direct **Route, Waypoint, and Track management** on Raymarine
 MFDs from a laptop over an ethernet cable, without running Raymarine's RNS software.
 The work was conducted on a Raymarine **E80** chartplotter, but the SeatalkHS
@@ -81,6 +86,11 @@ reverse engineering for personal and educational purposes.
 - **[CSV Tool](../CSV/docs/readme.md)** -
   Conversion from Google Earth KML to Raymarine RNS-compatible CSV format,
   enabling a Google Earth -> RNS -> E80 navigation data workflow.
+
+- **[E80 Firmware](e80_firmware/readme.md)** -
+  Independent study of the Raymarine E80 multifunction-display firmware: its
+  architecture, the service abstracts mapped to the NET protocols, the deployment
+  and modification scheme, and the cleanroom methodology.
 
 ## Credits
 
