@@ -778,7 +778,7 @@ sub do_general_name
 		
 		if ($what eq 'name')
 		{
-			return error("TRACK set_name: name exceeds E80 limit of $E80_MAX_NAME chars: '$rvalue'")
+			return error("TRACK set_name: name exceeds ESeries limit of $E80_MAX_NAME chars: '$rvalue'")
 				if length($rvalue) > $E80_MAX_NAME;
 			$param = pack('H*',name16_hex($rvalue));
 		}
@@ -833,7 +833,7 @@ sub do_general_name
 		return error("Could not find track(".lc($old_name).") for rename")
 			if !$uuid;
 
-		return error("TRACK rename: new name exceeds E80 limit of $E80_MAX_NAME chars: '$new_name'")
+		return error("TRACK rename: new name exceeds ESeries limit of $E80_MAX_NAME chars: '$new_name'")
 			if length($new_name) > $E80_MAX_NAME;
 		display($dbg,1,"renaming (".lc($old_name).")=$uuid to '$new_name'");
 		$param = pack('H*',name16_hex($new_name));
@@ -912,7 +912,7 @@ sub do_general
 	elsif ($rpart =~ /^rename\s+(.+)$/)
 	{
 		my $new_name = $1;
-		return error("TRACK rename: new name exceeds E80 limit of $E80_MAX_NAME chars: '$new_name'")
+		return error("TRACK rename: new name exceeds ESeries limit of $E80_MAX_NAME chars: '$new_name'")
 			if length($new_name) > $E80_MAX_NAME;
 		$cmd   = $TRACK_CMD_RENAME;
 		$param = pack('H*',name16_hex($new_name));

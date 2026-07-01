@@ -106,9 +106,9 @@ sub createWaypoint
 	my $depth    = $hash->{depth}    // 0;
 	my $temp_k   = $hash->{temp_k}   // 0;
 	my $progress = $hash->{progress};
-	return error("createWaypoint: name exceeds E80 limit of $E80_MAX_NAME chars: '$name'")
+	return error("createWaypoint: name exceeds ESeries limit of $E80_MAX_NAME chars: '$name'")
 		if length($name) > $E80_MAX_NAME;
-	return error("createWaypoint: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("createWaypoint: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if length($comment) > $E80_MAX_COMMENT;
 	$this->showCommand("createWaypoint($name) uuid($uuid)");
 	my $alt_coords = latLonToNorthEast($lat,$lon);
@@ -140,9 +140,9 @@ sub modifyWaypoint
 	my $uuid = $hash->{uuid};
 	my $wp   = $this->{waypoints}{$uuid};
 	return error("modifyWaypoint: uuid($uuid) not in memory") if !$wp;
-	return error("modifyWaypoint: name exceeds E80 limit of $E80_MAX_NAME chars: '$hash->{name}'")
+	return error("modifyWaypoint: name exceeds ESeries limit of $E80_MAX_NAME chars: '$hash->{name}'")
 		if exists $hash->{name} && length($hash->{name}) > $E80_MAX_NAME;
-	return error("modifyWaypoint: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("modifyWaypoint: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if exists $hash->{comment} && length($hash->{comment}) > $E80_MAX_COMMENT;
 	for my $key (keys %$hash)
 	{
@@ -201,9 +201,9 @@ sub createGroup
 	my $comment = $hash->{comment} // '';
 	my $members  = $hash->{members}  // [];
 	my $progress = $hash->{progress};
-	return error("createGroup: name exceeds E80 limit of $E80_MAX_NAME chars: '$name'")
+	return error("createGroup: name exceeds ESeries limit of $E80_MAX_NAME chars: '$name'")
 		if length($name) > $E80_MAX_NAME;
-	return error("createGroup: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("createGroup: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if length($comment) > $E80_MAX_COMMENT;
 	$this->showCommand("createGroup($name) uuid($uuid) members(".scalar(@$members).")");
 	my $buffer = buildGroup(0,{
@@ -222,9 +222,9 @@ sub modifyGroup
 	my $uuid  = $hash->{uuid};
 	my $group = $this->{groups}{$uuid};
 	return error("modifyGroup: uuid($uuid) not in memory") if !$group;
-	return error("modifyGroup: name exceeds E80 limit of $E80_MAX_NAME chars: '$hash->{name}'")
+	return error("modifyGroup: name exceeds ESeries limit of $E80_MAX_NAME chars: '$hash->{name}'")
 		if exists $hash->{name} && length($hash->{name}) > $E80_MAX_NAME;
-	return error("modifyGroup: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("modifyGroup: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if exists $hash->{comment} && length($hash->{comment}) > $E80_MAX_COMMENT;
 	if (exists $hash->{members})
 	{
@@ -306,9 +306,9 @@ sub createRoute
 	my $color     = $hash->{color}     // $next_color++ % $NUM_ROUTE_COLORS;
 	my $waypoints = $hash->{waypoints} // [];
 	my $progress  = $hash->{progress};
-	return error("createRoute: name exceeds E80 limit of $E80_MAX_NAME chars: '$name'")
+	return error("createRoute: name exceeds ESeries limit of $E80_MAX_NAME chars: '$name'")
 		if length($name) > $E80_MAX_NAME;
-	return error("createRoute: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("createRoute: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if length($comment) > $E80_MAX_COMMENT;
 	$this->showCommand("createRoute($name) uuid($uuid) wps(".scalar(@$waypoints).")");
 	my @pts = map { shared_clone({}) } @$waypoints;
@@ -332,9 +332,9 @@ sub modifyRoute
 	my $uuid  = $hash->{uuid};
 	my $route = $this->{routes}{$uuid};
 	return error("modifyRoute: uuid($uuid) not in memory") if !$route;
-	return error("modifyRoute: name exceeds E80 limit of $E80_MAX_NAME chars: '$hash->{name}'")
+	return error("modifyRoute: name exceeds ESeries limit of $E80_MAX_NAME chars: '$hash->{name}'")
 		if exists $hash->{name} && length($hash->{name}) > $E80_MAX_NAME;
-	return error("modifyRoute: comment exceeds E80 limit of $E80_MAX_COMMENT chars")
+	return error("modifyRoute: comment exceeds ESeries limit of $E80_MAX_COMMENT chars")
 		if exists $hash->{comment} && length($hash->{comment}) > $E80_MAX_COMMENT;
 	if (exists $hash->{waypoints})
 	{
