@@ -33,7 +33,9 @@ my $dbg_rr = -1;			# request and replies
 
 
 my $ID_SELECT_COMBO = 1002;
-my $COMBO_LEFT = 100;
+my $COMBO_WIDTH = 180;
+	# wide enough for 'E120(nnnnnnnn)' in the fixed bold font
+my $COMBO_LEFT = $COMBO_WIDTH + 10;
 	# from right of window
 
 
@@ -107,7 +109,7 @@ sub new
 	$this->{command_ctrl} = Wx::StaticText->new($this,-1,'',[100,10]);
 	$this->{path_ctrl} = Wx::StaticText->new($this,-1,'',[10,30]);
 
-	$this->{device_combo} = Wx::ComboBox->new($this, $ID_SELECT_COMBO,'',[400,10],[90,25],[],wxCB_READONLY);
+	$this->{device_combo} = Wx::ComboBox->new($this, $ID_SELECT_COMBO,'',[400,10],[$COMBO_WIDTH,25],[],wxCB_READONLY);
 
     my $ctrl = $this->{list_ctrl} = Wx::ListCtrl->new($this,-1,[0,$TOP_MARGIN],[-1,-1], wxLC_REPORT); # | wxLC_EDIT_LABELS);
     $ctrl->{parent} = $this;
@@ -205,15 +207,18 @@ sub onFileDeviceCombo
 	my $filesys = $this->{filesys};
 	return error("no filesys") if !$filesys;
 
-	# my $id = $event->GetId();
+	# the visible combo label is not the key; the device_id is carried
+	# as the item's client data (see checkFilesysPorts)
+
 	my $combo = $event->GetEventObject();
-	my $selected = $combo->GetValue();
-	my $service_port = $this->{filesys_ports}->{$selected};
-	return error("huh? could not find service_port($selected)")
+	my $sel = $combo->GetSelection();
+	my $device_id = $sel >= 0 ? $combo->GetClientData($sel) : '';
+	my $service_port = $this->{filesys_ports}->{$device_id};
+	return error("huh? could not find service_port($device_id)")
 		if !$service_port;
-	display(0,0,"Changing cur_filesys_id to $selected");
+	display(0,0,"Changing cur_filesys_id to $device_id");
 	$filesys->setServicePort($service_port);
-	$this->{cur_filesys_id} = $selected;
+	$this->{cur_filesys_id} = $device_id;
 	$this->{started} = 0;	# trigger a get of /
 }
 
@@ -1012,6 +1017,22 @@ sub clearEverything
 
 
 
+sub deviceLabel
+	# The dropdown shows the friendly nickname for known devices
+	# (device_id is already the nickname in that case), and
+	# 'MODEL(device_id)' for unknown devices, where MODEL comes from
+	# the RAYDP IDENT ('E80', 'E120', ...) so a naive user can tell a
+	# mix of ESeries chartplotters on the LAN apart.  Falls back to
+	# 'unknown(device_id)' if the device has not IDENT'd itself yet.
+{
+	my ($this,$device_id) = @_;
+	return $device_id if $device_id !~ /^[0-9a-f]{8}$/i;
+	my $type = $raydp->getDeviceType($device_id);
+	$type = 'unknown' if !$type;
+	return "$type($device_id)";
+}
+
+
 sub checkFilesysPorts
 {
 	my ($this) = @_;
@@ -1102,9 +1123,16 @@ sub checkFilesysPorts
 		my @ids = sort keys %$my_ports;
 		display($dbg_win,0,"rebuilding combo(".join(' ',@ids).")",0,$UTILS_COLOR_LIGHT_MAGENTA);
 
+		# The visible label is decoupled from the device_id: we carry the
+		# device_id as each item's client data and look it up by client
+		# data (not by the visible string) in onFileDeviceCombo.
+
+		my %combo_index;
+		my $index = 0;
 		for my $device_id (@ids)
 		{
-			$combo->Append($device_id);
+			$combo->Append($this->deviceLabel($device_id),$device_id);
+			$combo_index{$device_id} = $index++;
 		}
 
 		if (@ids && !$this->{cur_filesys_id})
@@ -1113,11 +1141,11 @@ sub checkFilesysPorts
 			my $port = $my_ports->{$device_id};
 			display($dbg_win,0,"setting cur_filesys_id($port->{addr} $device_id",0,$UTILS_COLOR_LIGHT_MAGENTA);
 			$filesys->setServicePort($port);
-			$combo->SetValue($device_id);
+			$combo->SetSelection($combo_index{$device_id});
 		}
 		elsif ($cur_id)
 		{
-			$combo->SetValue($cur_id);
+			$combo->SetSelection($combo_index{$cur_id}) if defined($combo_index{$cur_id});
 		}
 	}
 	
