@@ -39,6 +39,14 @@ documented in [architecture/services](../architecture/services.md).
 This doc is intentionally short -- it covers what doesn't
 belong in any single per-service doc.
 
+## Firmware compatibility (observed)
+
+The behavior documented across these abstracts has been observed and tested
+against E-Series firmware **v5.52**, **v5.69**, and modified **5.71+**.
+Raymarine's own publicly distributed RayTech RNS client refuses to run against
+E-Series units below the **v4.29** "new-flash" generation, treating 4.29 and
+later as compatible; the **v4.29-v5.51** range has not been observed here.
+
 ## Threading model
 
 RAYNET runs on **ThreadX**, Green Hills's RTOS for embedded

@@ -34,6 +34,14 @@ surface for /raymarine/NET, and the packet-length variants.
 The firmware names in the service catalog below were derived from types of the form `CLNet*Server`, where `*` is the
 firmware name. Example: `CLNetWaypointServer` gives "Waypoint".
 
+## Firmware compatibility (observed)
+
+The behavior documented here has been observed and tested against E-Series
+firmware **v5.52**, **v5.69**, and modified **5.71+**. Raymarine's own publicly
+distributed RayTech RNS client refuses to run against E-Series units below the
+**v4.29** "new-flash" generation, treating 4.29 and later as compatible; the
+**v4.29-v5.51** range has not been observed here.
+
 ## Consume vs serve
 
 A service appearing in the dispatcher's case alphabet means the
