@@ -110,6 +110,13 @@ my $DELAY_START = 3;
 my $SERVICE_PORT_TIMEOUT = 3;
 	# after this many seconds, RAYDP will destroy and
 	# delete the service port.
+
+my $MIN_FIRMWARE_X100 = 429;
+	# RAYNET/RAYDP require ESeries firmware >= 4.29.  Service ports
+	# advertised by devices below this floor (or that have not yet
+	# IDENTed themselves) are not added, and are therefore never
+	# implemented.  Compared in hundredths to avoid floating point
+	# rounding on values like 4.29.
 	
 
 BEGIN
@@ -215,6 +222,18 @@ sub getServicePortsByAddr
 {
 	my ($this) = @_;
 	return $this->{ports_by_addr};
+}
+
+
+sub getDeviceType
+	# returns the Raymarine model type string ('E80','E120',...)
+	# captured from the device's RAYDP IDENT message, or '' if the
+	# device has not IDENT'd itself yet.  Used by winFILESYS to label
+	# unknown devices in its dropdown box.
+{
+	my ($this,$device_id) = @_;
+	my $device = $this->{devices}->{$device_id};
+	return $device ? ($device->{type} // '') : '';
 }
 
 
@@ -437,6 +456,16 @@ sub _decode_header
 
 
 
+sub firmwareSupported
+	# true if a device's reported firmware version meets the
+	# RAYNET/RAYDP floor.  Compared in hundredths to avoid floating
+	# point rounding on values like 4.29.
+{
+	my ($version) = @_;
+	return int(($version // 0) * 100 + 0.5) >= $MIN_FIRMWARE_X100;
+}
+
+
 sub parsePacket
 	# a_parser override
 	# Always returns undef so that b_sock does not queue replies.
@@ -501,6 +530,11 @@ sub parsePacket
 		my $listen_port = unpack('v',substr($raw,20,2));
 		my $svc_port = unpack('v',substr($raw,22,2));
 
+		if (0)	# SPOOF TEST E80-2 as v3.33 to gate implemented services to >= v4.29
+		{
+			$version = 3.33 if $ip eq $E80_2_IP;
+		}
+
 		my $name_len = unpack('V',substr($raw,24,4));
 			# includes a dword for the service id?
 		my $service_id = unpack('V',substr($raw,28,4));
@@ -531,6 +565,7 @@ sub parsePacket
 		$this->{devices}->{$device_id} = shared_clone({
 			alive_time	=> time(),
 			device_id 	=> $device_id,
+			type		=> $type,
 			version		=> $version,
 			listen_port	=> $listen_port,
 			ip 			=> $ip,
@@ -565,29 +600,40 @@ sub parsePacket
     my $text1 = "len($len) $id_str $service_id_string x($x1,$x2)";
     my $payload = $len > 20 ? substr($raw, 5 * 4) : '';
 
+	# Gate service ports on the advertising device's firmware.  We only
+	# add (and therefore only ever implement) ports once the device has
+	# IDENTed itself AND reports firmware >= the RAYNET/RAYDP floor.
+	# Un-IDENTed devices are retried on the next (~1 sec) advertisement;
+	# below-floor devices are declined for good.
+
+	my $device       = $this->{devices}->{$device_id};
+	my $no_ident_yet = !$device;
+	my $fw_too_old   = $device && !firmwareSupported($device->{version});
+	my $add_ok       = $device && !$fw_too_old;
+
     if ($len == 28)
     {
         $text2 = _decode_header(0,$rec, $payload, qw(ip port));
-        $is_new = 1 if $this->addServicePort($rec,$rec->{ip},$rec->{port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{ip},$rec->{port});
     }
     elsif ($len == 36)
     {
         $text2 = _decode_header(0,$rec, $payload, qw(mcast_ip mcast_port ip port));
-        $is_new = 1 if $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
-        $is_new = 1 if $this->addServicePort($rec,$rec->{ip},$rec->{port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{ip},$rec->{port});
     }
     elsif ($len == 37)
     {
         $text2 = _decode_header(1, $rec, $payload, qw(mcast_ip mcast_port ip port));
-        $is_new = 1 if $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
-        $is_new = 1 if $this->addServicePort($rec,$rec->{ip},$rec->{port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{ip},$rec->{port});
     }
     elsif ($len == 40)
     {
         $text2 = _decode_header(0,$rec, $payload, qw(ip port1 port2 mcast_ip mcast_port));
-        $is_new = 1 if $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
-        $is_new = 1 if $this->addServicePort($rec,$rec->{ip},$rec->{port1});
-        $is_new = 1 if $this->addServicePort($rec,$rec->{ip},$rec->{port2});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{mcast_ip},$rec->{mcast_port});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{ip},$rec->{port1});
+        $is_new = 1 if $add_ok && $this->addServicePort($rec,$rec->{ip},$rec->{port2});
     }
 
     # UNKNOWN packets that show the first time we see them
@@ -606,9 +652,29 @@ sub parsePacket
 		return undef;
     }
 
-	# finished. Display new ones
+	# finished. Show what happened: newly added ports in the LOG color,
+	# the ~1 sec retry loop for not-yet-IDENTed devices in light magenta,
+	# and below-floor devices only when dbg_raydp < 0.
 
-	if ($is_new && $dbg_raydp <= 0)
+	if ($no_ident_yet)
+	{
+		if ($dbg_raydp <= 0)
+		{
+			setConsoleColor($UTILS_COLOR_LIGHT_MAGENTA);
+			print "RAYDP(no ident yet) $text1 $text2\n";
+			setConsoleColor();
+		}
+	}
+	elsif ($fw_too_old)
+	{
+		if ($dbg_raydp < 0)
+		{
+			setConsoleColor($DISPLAY_COLOR_WARNING);
+			print "RAYDP(fw $device->{version} < 4.29) $text1 $text2\n";
+			setConsoleColor();
+		}
+	}
+	elsif ($is_new && $dbg_raydp <= 0)
 	{
 		setConsoleColor($DISPLAY_COLOR_LOG);
 		print "RAYDP $text1 $text2\n";
